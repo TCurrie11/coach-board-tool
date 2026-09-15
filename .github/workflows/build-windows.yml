@@ -1,0 +1,38 @@
+name: Build Windows exe
+
+# Builds CoachBoardTool.exe on a real Windows machine (GitHub's own runner)
+# whenever you push, or whenever you trigger it manually from the Actions tab.
+# You don't need a Windows PC of your own for this.
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: {}
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Pre-download ffmpeg (so it gets bundled into the exe)
+        run: python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"
+
+      - name: Build with PyInstaller
+        run: pyinstaller coach_board_tool.spec --noconfirm
+
+      - name: Upload CoachBoardTool.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoachBoardTool-windows
+          path: dist/CoachBoardTool.exe
