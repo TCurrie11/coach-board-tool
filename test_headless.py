@@ -119,6 +119,41 @@ def main():
     assert arrows and arrows[-1].linked_piece_id == mover2.id, "arrow drawn from a piece was not linked to it"
     print("App correctly links a freehand arrow to the piece it starts on")
 
+    # --- regression test: piece must stay aligned with the field at export
+    # size too (this was the bug - editor and export used to compute the
+    # field layout at different container sizes, so pieces drifted).
+    from scene import compose_frame
+    from field import fit_field_rect
+    from config import REFERENCE_W, REFERENCE_H, EXPORT_WIDTH, EXPORT_HEIGHT
+
+    layout = fit_field_rect((0, 0, REFERENCE_W, REFERENCE_H), 'half')
+    # place a piece exactly on the crease/goal center (a fixed field landmark)
+    goal_x = layout['x']  # half field: goal sits at DIST_GOAL yards from x=layout['x']
+    from config import DIST_GOAL
+    goal_x = layout['x'] + DIST_GOAL * layout['s']
+    goal_y = layout['y'] + layout['h'] / 2
+    on_goal = Piece.create('X', (goal_x, goal_y))
+
+    def find_centroid(surface, w, h, color, step=2):
+        xs, ys = [], []
+        for x in range(0, w, step):
+            for y in range(0, h, step):
+                r, g, b = surface.get_at((x, y))[:3]
+                if abs(r - color[0]) < 10 and abs(g - color[1]) < 10 and abs(b - color[2]) < 10:
+                    xs.append(x); ys.append(y)
+        return (sum(xs) / len(xs), sum(ys) / len(ys)) if xs else None
+
+    from config import OFFENSE_COLOR, CREASE_COLOR
+    for (ow, oh, label) in [(REFERENCE_W, REFERENCE_H, "editor-size"), (EXPORT_WIDTH, EXPORT_HEIGHT, "export-size")]:
+        surf, _ = compose_frame(ow, oh, 'half', 0, [on_goal], {on_goal.id: on_goal.pos}, [], app.piece_font, (18, 18, 20))
+        piece_centroid = find_centroid(surf, ow, oh, OFFENSE_COLOR)
+        crease_centroid = find_centroid(surf, ow, oh, CREASE_COLOR)
+        assert piece_centroid and crease_centroid, f"{label}: couldn't find piece or crease"
+        dist = ((piece_centroid[0] - crease_centroid[0]) ** 2 + (piece_centroid[1] - crease_centroid[1]) ** 2) ** 0.5
+        assert dist < 5, f"{label}: piece drifted {dist:.1f}px from the crease it was placed on!"
+        print(f"{label}: piece stayed aligned with crease (offset {dist:.2f}px)")
+    print("Editor/export alignment regression test passed")
+
     # --- rotation + round trip through the scene composer --------------
     app.rotation_deg = 35
     app.draw()

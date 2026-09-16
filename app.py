@@ -56,8 +56,10 @@ class App:
         self.preview_timer = 0.0
 
         self.container_origin = (FIELD_MARGIN, FIELD_MARGIN)
+        _cw, _ch = self._container_wh()
         self.last_transform = {'angle': 0.0, 'scale': 1.0,
-                                'center': (self._container_wh()[0] / 2, self._container_wh()[1] / 2)}
+                                'ref_center': (_cw / 2, _ch / 2),
+                                'out_center': (_cw / 2, _ch / 2)}
 
         self.status_message = "Welcome! Use 'Add X' / 'Add O' to place players, then draw and hit Add Step."
 

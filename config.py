@@ -51,6 +51,14 @@ BASE_DIR = _base_dir()
 EXPORTS_DIR = os.path.join(BASE_DIR, "exports")
 SAVES_DIR = os.path.join(BASE_DIR, "saved_plays")
 
+# --- Fixed internal coordinate space -------------------------------------
+# Pieces/annotations are always laid out at this size; compose_frame scales
+# the *whole finished picture* to fit whatever output size is requested
+# (the live editor window vs. an exported video are different sizes/aspect
+# ratios), so the field and everything on it always move together.
+REFERENCE_W = WINDOW_WIDTH - SIDEBAR_WIDTH - 2 * FIELD_MARGIN
+REFERENCE_H = WINDOW_HEIGHT - 2 * FIELD_MARGIN
+
 # --- Freehand-to-smooth-arrow tuning ------------------------------------
 FREEHAND_MIN_DRAG = 6      # px - below this, treat as a click, not a drag
 PATH_SMOOTH_MIN_DIST = 10  # px - jitter filter before spline fitting
