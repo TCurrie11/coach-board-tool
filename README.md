@@ -4,8 +4,9 @@ A desktop tool for drawing lacrosse plays and turning them into a short
 animated clip (MP4 or GIF) you can drop straight into a PowerPoint slide.
 
 **Sending this to non-technical coaches?** They don't need any of the setup
-below — see [HOW_TO_BUILD_EXE.md](HOW_TO_BUILD_EXE.md) to produce a single
-`CoachBoardTool.exe` they can just double-click.
+below — see [HOW_TO_BUILD_EXE.md](HOW_TO_BUILD_EXE.md) to produce a
+`CoachBoardTool.exe` (Windows) or `CoachBoardTool.app` (Mac) they can just
+double-click.
 
 The instructions below are for running it from source (e.g. while you're
 still tweaking it).

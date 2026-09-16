@@ -1,0 +1,50 @@
+name: Build macOS app
+
+# Builds CoachBoardTool.app on a real Apple Silicon Mac (GitHub's own
+# runner) whenever you push, or when triggered manually from the Actions
+# tab. You don't need a Mac of your own for this.
+#
+# Note: this targets Apple Silicon (M1 and newer), which covers the very
+# large majority of Macs in use today - Apple stopped selling Intel Macs
+# in 2022, and GitHub retired free Intel-Mac build runners in Dec 2025.
+# An Intel Mac cannot run an Apple-Silicon-only app (Rosetta only
+# translates the other direction). If you specifically know a coach is on
+# an old Intel Mac, see HOW_TO_BUILD_EXE.md for options.
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: {}
+
+jobs:
+  build-macos-app:
+    runs-on: macos-14   # Apple Silicon (arm64)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Pre-download ffmpeg (so it gets bundled into the app)
+        run: python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"
+
+      - name: Build with PyInstaller
+        run: pyinstaller coach_board_tool.spec --noconfirm
+
+      - name: Zip the .app bundle (ditto preserves the bundle structure correctly)
+        run: |
+          cd dist
+          ditto -c -k --keepParent CoachBoardTool.app CoachBoardTool-macos-appleSilicon.zip
+
+      - name: Upload CoachBoardTool.app
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoachBoardTool-macos-appleSilicon
+          path: dist/CoachBoardTool-macos-appleSilicon.zip
