@@ -5,6 +5,17 @@ All notable changes to Coach Board Tool. Versions follow
 
 Author: [TCurrie11](https://github.com/TCurrie11)
 
+## 2.1.0 - 2026-10-14
+- Native **Open / Save / Save as** dialogs replace the file-name text box;
+  export also asks where to save. Dialogs remember the last folder used.
+- **File → New play** and **File → Open recent** (last 8 plays).
+- The window title shows the play's name and marks unsaved changes. You're
+  asked to save before closing, opening another play or starting a new one.
+  Changes are detected by comparing with the last-saved state, so undoing
+  back to it counts as no changes.
+- Drag a play file onto the window, or pass one on the command line, to open it.
+- 5 new end-to-end tests for dialogs, unsaved changes and recent files.
+
 ## 2.0.0 - 2026-10-14
 Moved from pygame to Qt (PySide6).
 

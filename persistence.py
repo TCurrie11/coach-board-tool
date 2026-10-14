@@ -11,14 +11,20 @@ Project: Coach Board Tool
 Version history:
     1.0.0  2026-09-15  TCurrie11  Initial release.
     1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+    2.1.0  2026-10-14  TCurrie11  serialize_play made public for unsaved-change detection; added PLAY_FILE_SUFFIX.
 """
 import json
+
 from entities import Piece, Annotation
 from timeline import Step
 
+PLAY_FILE_SUFFIX = ".json"
 
-def _serialize(pieces, steps_manager, field_mode, rotation_deg=0.0):
-    """Convert the play into a JSON-safe dict (tuples become lists, int keys become strings)."""
+
+def serialize_play(pieces, steps_manager, field_mode, rotation_deg=0.0):
+    """Convert the play into a JSON-safe dict (tuples become lists, int keys
+    become strings). Also used to detect unsaved changes: two plays are the
+    same if their serialized forms are equal."""
     return {
         'field_mode': field_mode,
         'rotation_deg': rotation_deg,
@@ -46,7 +52,7 @@ def _serialize(pieces, steps_manager, field_mode, rotation_deg=0.0):
 
 def save_play(path, pieces, steps_manager, field_mode, rotation_deg=0.0):
     """Write the play to `path` as indented JSON."""
-    data = _serialize(pieces, steps_manager, field_mode, rotation_deg)
+    data = serialize_play(pieces, steps_manager, field_mode, rotation_deg)
     with open(path, 'w') as f:
         json.dump(data, f, indent=2)
 

@@ -17,12 +17,14 @@ Version history:
     1.1.2  2026-10-14  TCurrie11  COACH_BOARD_DATA_DIR environment override for output folders.
     1.2.0  2026-10-14  TCurrie11  Dropped PATH_SMOOTH_MIN_DIST; smoothing tuning now lives in path_smoothing.py.
     2.0.0  2026-10-14  TCurrie11  Qt UI: removed pygame window/sidebar sizes and widget colours; reference canvas size is now fixed explicitly.
+    2.1.0  2026-10-14  TCurrie11  Added APP_ORGANIZATION for per-user settings.
 """
 import os
 import sys
 
 APP_NAME = "Coach Board Tool"
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.1.0"
+APP_ORGANIZATION = "TCurrie11"
 
 # --- Timing / export ---------------------------------------------------
 PREVIEW_FPS = 60
