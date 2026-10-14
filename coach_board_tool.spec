@@ -8,6 +8,7 @@
 #     1.0.0  2026-09-15  TCurrie11  Initial release.
 #     1.1.0  2026-09-16  TCurrie11  macOS .app bundle (onedir + BUNDLE).
 #     1.1.1  2026-10-14  TCurrie11  Added file header and version history.
+#     2.0.0  2026-10-14  TCurrie11  Bundles PySide6 instead of pygame; excludes unused Qt modules.
 # =====================================================================
 #
 # PyInstaller spec for Coach Board Tool.
@@ -32,7 +33,9 @@ datas = []
 binaries = []
 hiddenimports = []
 
-for pkg in ('pygame', 'imageio_ffmpeg', 'imageio'):
+# PySide6 is handled by PyInstaller's own built-in hook; only the video
+# libraries need their data files (e.g. the ffmpeg binary) collected here.
+for pkg in ('imageio_ffmpeg', 'imageio'):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
@@ -47,7 +50,12 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # Qt modules the app never imports - leaving them out keeps the download small.
+    excludes=[
+        'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets', 'PySide6.QtQml',
+        'PySide6.QtQuick', 'PySide6.Qt3DCore', 'PySide6.QtMultimedia',
+        'PySide6.QtCharts', 'PySide6.QtDataVisualization', 'PySide6.QtPdf',
+    ],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

@@ -16,9 +16,9 @@ Version history:
 import math
 import random
 
+from geometry import distance_to_segment
 from path_smoothing import (
-    smooth_freehand_path, simplify, resample_evenly, point_at_distance_from_end,
-    distance_to_segment, path_length,
+    smooth_freehand_path, simplify, resample_evenly, point_at_distance_from_end, path_length,
 )
 
 HAND_WOBBLE_PX = 1.5

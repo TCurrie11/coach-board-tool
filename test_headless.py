@@ -1,10 +1,13 @@
 """
-test_headless.py - End-to-end smoke test that runs without a display.
-=====================================================================
+test_headless.py - End-to-end tests that run without a display.
+===============================================================
 
-Drives the real `App` with SDL's dummy video driver: places pieces,
-draws arrows, builds steps, previews, exports MP4/GIF and round-trips a
-save file. Run with `python test_headless.py`; exits non-zero on failure.
+Uses Qt's off-screen platform so the real editor, board widget, main
+window, renderer and exporter all run headless (e.g. in CI). Covers piece
+placement, freehand lines, steps, timeline animation, click mapping under
+rotation, field alignment at every output size, MP4/GIF export and
+save/load. Runs with plain `python test_headless.py` or under pytest; exits
+non-zero on failure.
 
 Author:  TCurrie11 (https://github.com/TCurrie11)
 Project: Coach Board Tool
@@ -15,221 +18,323 @@ Version history:
     1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
     1.1.2  2026-10-14  TCurrie11  Test output goes to a temp folder; no longer deletes real saves/exports.
     1.2.0  2026-10-14  TCurrie11  Uses smooth_freehand_path.
+    2.0.0  2026-10-14  TCurrie11  Rewritten for the Qt UI as independent test functions; added rotation-mapping and GIF-timing tests.
 """
-
+import math
 import os
 import shutil
 import sys
 import tempfile
-import traceback
 
-os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
-os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 # Write every export/save into a throwaway folder, never the real
 # exports/ and saved_plays/ folders. Must be set before `config` is imported.
 TEST_DATA_DIR = tempfile.mkdtemp(prefix="coach_board_test_")
 os.environ["COACH_BOARD_DATA_DIR"] = TEST_DATA_DIR
 
+import numpy as np
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
 
-def main():
-    from app import App
-    from entities import Piece, Annotation
-    from timeline import generate_timeline_frames
-    from config import EXPORTS_DIR, SAVES_DIR
+APP = QApplication.instance() or QApplication(sys.argv)
 
-    assert EXPORTS_DIR.startswith(TEST_DATA_DIR), "test must not write to the real exports folder"
+import persistence
+from config import (
+    CREASE_COLOR, DIST_GOAL, EXPORT_HEIGHT, EXPORT_WIDTH, EXPORTS_DIR, OFFENSE_COLOR,
+    REFERENCE_H, REFERENCE_W, SAVES_DIR,
+)
+from editor import PlayEditor, Tool
+from entities import Annotation, Piece
+from exporter import qimage_to_rgb_array
+from field import fit_field_rect
+from main_window import MainWindow
+from render import piece_label_font
+from scene import output_to_reference, render_frame_image, view_transform
+from timeline import StepManager, generate_timeline_frames
 
-    app = App()
-    print("App initialized OK")
+assert EXPORTS_DIR.startswith(TEST_DATA_DIR), "tests must not write to the real exports folder"
 
-    # --- pieces + ball -----------------------------------------------
-    p1 = Piece.create('X', (300, 300))
-    p2 = Piece.create('O', (500, 300))
-    app.pieces = [p1, p2]
-    app.mode = 'add_ball'
-    app.on_mouse_down((60, 60))  # within the field canvas, exercises the real add_ball code path
-    ball = app.get_ball()
-    assert ball is not None, "ball was not created by add_ball tool"
-    print("Ball created at", ball.pos)
+RED = OFFENSE_COLOR
 
-    app.hold_input.text = "1.0"
-    app.add_step()
-    assert len(app.steps.steps) == 1
-    ball_pos_step0 = app.steps.steps[0].positions[ball.id]
 
-    # --- freehand smoothing -------------------------------------------
-    from path_smoothing import smooth_freehand_path
-    raw = [(0, 0), (20, 5), (40, 25), (60, 60), (90, 70), (120, 65)]
-    smoothed = smooth_freehand_path(raw)
-    assert smoothed[0] == raw[0] and smoothed[-1] == raw[-1], "smoothing must keep both endpoints"
-    print(f"smooth_freehand_path: {len(raw)} raw points -> {len(smoothed)} smoothed points")
+def drag_with_tool(editor, tool, points):
+    """Simulate press -> drags -> release through `points` with `tool`."""
+    editor.set_tool(tool)
+    editor.press(points[0])
+    for point in points[1:-1]:
+        editor.drag(point)
+    editor.release(points[-1])
 
-    app.pending_annotations.append(Annotation('arrow', (205, 35, 35), tuple(smoothed), False))
-    app.pending_annotations.append(Annotation('pick', (205, 35, 35), ((400, 350),), False))  # picks: persist=False now
 
-    p1.pos = (450, 300)
-    app.move_input.text = "0.8"
-    app.hold_input.text = "1.0"
-    app.add_step()
-    assert len(app.steps.steps) == 2
-    # ball position should have carried forward unchanged (nobody moved it)
-    assert app.steps.steps[1].positions[ball.id] == ball_pos_step0, "ball position did not persist across steps"
-    print("Ball position correctly carried forward into step 2")
+def bowed_path(start, end, bulge, samples=11):
+    """Points from start to end bowing `bulge` px upward at the middle."""
+    return [(start[0] + (end[0] - start[0]) * i / (samples - 1),
+             start[1] + (end[1] - start[1]) * i / (samples - 1) - bulge * math.sin(math.pi * i / (samples - 1)))
+            for i in range(samples)]
 
-    # pick should be transient (persist=False) -> confirm via generated frames
-    frames = generate_timeline_frames(app.steps.steps, fps=30)
-    print(f"Generated {len(frames)} timeline frames")
-    # after all frames, no 'pick' annotation should remain in the final frame
-    _, last_anns = frames[-1]
-    assert not any(a.kind == 'pick' for a in last_anns), "pick should not persist into later frames"
-    print("Pick correctly non-persistent")
 
-    # --- per-action undo -----------------------------------------------
-    before = len(app.pieces)
-    app.mode = 'add_x'
-    app._push_undo()
-    app.pieces.append(Piece.create('X', (100, 100)))
-    assert len(app.pieces) == before + 1
-    app.undo_action()
-    assert len(app.pieces) == before, "undo_action did not revert piece addition"
-    print("Per-action undo OK")
+def colour_centroid(rgb_array, colour, tolerance=10):
+    """Mean (x, y) of every pixel within `tolerance` of `colour`, or None."""
+    close = np.all(np.abs(rgb_array.astype(int) - np.array(colour)) < tolerance, axis=2)
+    ys, xs = np.nonzero(close)
+    return (xs.mean(), ys.mean()) if len(xs) else None
 
-    # --- linked movement arrow: piece should follow the CURVE, not a straight line --
-    from timeline import StepManager, generate_timeline_frames as gen_frames
-    sm = StepManager()
+
+# ================================================================ editor ==
+def test_add_tools_place_pieces_and_only_one_ball():
+    editor = PlayEditor()
+    for tool, point in [(Tool.ADD_OFFENSE, (300, 300)), (Tool.ADD_DEFENSE, (500, 300)),
+                        (Tool.ADD_BALL, (60, 60)), (Tool.ADD_BALL, (80, 90))]:
+        editor.set_tool(tool)
+        editor.press(point)
+    assert [p.team for p in editor.pieces] == ['X', 'O', 'BALL']
+    assert editor.ball().pos == (80, 90), "second ball click should move the existing ball"
+
+
+def test_select_tool_drags_a_piece():
+    editor = PlayEditor()
+    piece = Piece.create('X', (200, 200))
+    editor.pieces.append(piece)
+    drag_with_tool(editor, Tool.SELECT, [(203, 198), (250, 240), (300, 260)])
+    assert piece.pos == (250, 240), "release only ends the drag; the last drag point wins"
+    assert editor.dragging_piece is None
+
+
+def test_ball_position_carries_forward_into_new_steps():
+    editor = PlayEditor()
+    editor.set_tool(Tool.ADD_BALL)
+    editor.press((60, 60))
+    editor.commit_step(1.0, 1.0)
+    editor.commit_step(0.8, 1.0)
+    ball_id = editor.ball().id
+    assert editor.steps.steps[1].positions[ball_id] == editor.steps.steps[0].positions[ball_id]
+
+
+def test_first_step_never_has_a_glide_in():
+    editor = PlayEditor()
+    editor.commit_step(2.5, 1.0)
+    assert editor.steps.steps[0].move_duration == 0.0
+
+
+def test_arrow_started_on_a_player_is_linked_and_smoothed():
+    editor = PlayEditor()
+    runner = Piece.create('X', (200, 200))
+    editor.pieces.append(runner)
+    drag_with_tool(editor, Tool.ARROW, [(200 + i * 15, 200 + i * 4) for i in range(7)])
+    arrow = editor.pending_annotations[-1]
+    assert arrow.kind == 'arrow' and arrow.linked_piece_id == runner.id
+    assert arrow.color == RED
+    assert arrow.points[0] == (200, 200)
+
+
+def test_pass_is_never_linked_to_a_player():
+    editor = PlayEditor()
+    passer = Piece.create('O', (200, 200))
+    editor.pieces.append(passer)
+    drag_with_tool(editor, Tool.PASS, [(200 + i * 15, 200) for i in range(7)])
+    assert editor.pending_annotations[-1].linked_piece_id is None
+
+
+def test_tiny_drag_is_treated_as_a_click_not_a_line():
+    editor = PlayEditor()
+    drag_with_tool(editor, Tool.ARROW, [(100, 100), (102, 101)])
+    assert editor.pending_annotations == []
+
+
+def test_delete_tool_removes_pieces_then_lines():
+    editor = PlayEditor()
+    piece = Piece.create('X', (100, 100))
+    editor.pieces.append(piece)
+    editor.pending_annotations.append(Annotation('arrow', RED, ((300, 300), (400, 300))))
+    editor.set_tool(Tool.DELETE)
+    editor.press((100, 100))
+    editor.press((350, 302))
+    assert editor.pieces == [] and editor.pending_annotations == []
+
+
+def test_undo_reverts_one_action_at_a_time():
+    editor = PlayEditor()
+    editor.set_tool(Tool.ADD_OFFENSE)
+    editor.press((100, 100))
+    editor.press((200, 200))
+    assert editor.undo_last_action() and len(editor.pieces) == 1
+    assert editor.undo_last_action() and len(editor.pieces) == 0
+    assert not editor.undo_last_action()
+
+
+# ============================================================== timeline ==
+def test_linked_arrow_makes_the_piece_follow_the_curve():
+    steps = StepManager()
     mover = Piece.create('X', (100, 100))
-    sm.add_step({mover.id: mover.pos}, [], 0.0, 0.2)
-    # A pronounced curved (bowed) path from (100,100) to (300,100): bulges up to y=20 at the midpoint.
-    curved_path = tuple((100 + i * 20, 100 - (i * (10 - i)) * 4) for i in range(11))
-    arrow = Annotation('arrow', (205, 35, 35), curved_path, False, linked_piece_id=mover.id)
-    sm.add_step({mover.id: (300, 100)}, [arrow], 1.0, 0.2)
-    curve_frames = gen_frames(sm.steps, fps=30)
-    mid_frame_positions = [pos[mover.id] for pos, _ in curve_frames if abs(pos[mover.id][0] - 200) < 15]
-    assert mid_frame_positions, "couldn't find a mid-path frame to check"
-    mid_y = mid_frame_positions[0][1]
-    straight_line_mid_y = 100  # a straight line from (100,100) to (300,100) never leaves y=100
-    assert abs(mid_y - straight_line_mid_y) > 20, (
-        f"piece did not follow the curved arrow (mid_y={mid_y}, expected well above/below {straight_line_mid_y})")
-    print(f"Linked-arrow curve following OK (mid-path y={mid_y:.1f}, straight-line would be {straight_line_mid_y})")
+    steps.add_step({mover.id: mover.pos}, [], 0.0, 0.2)
+    arrow = Annotation('arrow', RED, tuple(bowed_path((100, 100), (300, 100), bulge=80)),
+                       linked_piece_id=mover.id)
+    steps.add_step({mover.id: (300, 100)}, [arrow], 1.0, 0.2)
+    midway = [pos[mover.id] for pos, _ in generate_timeline_frames(steps.steps, fps=30)
+              if abs(pos[mover.id][0] - 200) < 15]
+    assert midway and midway[0][1] < 80, "piece should bow upward with the arrow, not travel straight"
 
-    # a 'pass' must never move a piece along its path, even if a curved one is
-    # (incorrectly) tagged with linked_piece_id - the engine should ignore that.
-    sm2 = StepManager()
+
+def test_pass_never_moves_a_piece_along_its_curve():
+    steps = StepManager()
     stander = Piece.create('O', (500, 500))
-    sm2.add_step({stander.id: stander.pos}, [], 0.0, 0.2)
-    curved_pass = tuple((500 + i * 20, 500 - (i * (10 - i)) * 4) for i in range(11))  # bulges to y=420
-    bogus_pass = Annotation('pass', (35, 95, 205), curved_pass, False, linked_piece_id=stander.id)
-    sm2.add_step({stander.id: (700, 500)}, [bogus_pass], 1.0, 0.2)  # real target: straight line to (700,500)
-    pass_frames = gen_frames(sm2.steps, fps=30)
-    mid_pass_positions = [pos[stander.id] for pos, _ in pass_frames if abs(pos[stander.id][0] - 600) < 15]
-    assert mid_pass_positions, "couldn't find a mid-path frame to check"
-    assert abs(mid_pass_positions[0][1] - 500) < 5, (
-        f"a pass must never move a piece along its curve (got y={mid_pass_positions[0][1]}, expected ~500)")
-    print("Pass annotations correctly never move a piece along their path")
+    steps.add_step({stander.id: stander.pos}, [], 0.0, 0.2)
+    bogus_pass = Annotation('pass', RED, tuple(bowed_path((500, 500), (700, 500), bulge=80)),
+                            linked_piece_id=stander.id)
+    steps.add_step({stander.id: (700, 500)}, [bogus_pass], 1.0, 0.2)
+    midway = [pos[stander.id] for pos, _ in generate_timeline_frames(steps.steps, fps=30)
+              if abs(pos[stander.id][0] - 600) < 15]
+    assert midway and abs(midway[0][1] - 500) < 5
 
-    # --- the app's own arrow-drawing path links to the piece it starts on --
-    app.mode = 'arrow'
-    app.pending_annotations = []
-    mover2 = Piece.create('X', (200, 200))
-    app.pieces.append(mover2)
-    start_screen = (mover2.pos[0] + app.container_origin[0], mover2.pos[1] + app.container_origin[1])
-    app.on_mouse_down(start_screen)
-    for i in range(1, 6):
-        app.on_mouse_move((start_screen[0] + i * 15, start_screen[1] + i * 4))
-    app.on_mouse_up((start_screen[0] + 90, start_screen[1] + 30))
-    arrows = [a for a in app.pending_annotations if a.kind == 'arrow']
-    assert arrows and arrows[-1].linked_piece_id == mover2.id, "arrow drawn from a piece was not linked to it"
-    print("App correctly links a freehand arrow to the piece it starts on")
 
-    # --- regression test: piece must stay aligned with the field at export
-    # size too (this was the bug - editor and export used to compute the
-    # field layout at different container sizes, so pieces drifted).
-    from scene import compose_frame
-    from field import fit_field_rect
-    from config import REFERENCE_W, REFERENCE_H, EXPORT_WIDTH, EXPORT_HEIGHT
+def test_picks_only_show_during_their_own_step():
+    steps = StepManager()
+    steps.add_step({}, [], 0.0, 0.2)
+    steps.add_step({}, [Annotation('pick', RED, ((400, 350),))], 0.5, 0.2)
+    steps.add_step({}, [], 0.5, 0.2)
+    frames = generate_timeline_frames(steps.steps, fps=30)
+    assert any(a.kind == 'pick' for _, annotations in frames for a in annotations)
+    assert not any(a.kind == 'pick' for a in frames[-1][1])
 
+
+# ========================================================= scene / view ==
+def test_click_mapping_round_trips_at_any_rotation():
+    for rotation in (0, 35, 90, 180, 271.5):
+        transform = view_transform(1000, 700, rotation)
+        for reference_point in [(0, 0), (REFERENCE_W / 2, REFERENCE_H / 2), (812.5, 133)]:
+            on_screen = transform.map(*reference_point)
+            back = output_to_reference(on_screen, 1000, 700, rotation)
+            assert math.dist(back, reference_point) < 1e-6, f"rotation {rotation}: {back} != {reference_point}"
+
+
+def test_rotation_turns_the_field_anticlockwise_like_1x():
+    # In 1.x a +90 degree rotation put the field's right edge at the top.
+    top_of_screen = view_transform(1000, 1000, 90).map(REFERENCE_W, REFERENCE_H / 2)
+    assert top_of_screen[1] < 100
+
+
+def test_pieces_stay_on_the_crease_at_editor_and_export_sizes():
+    """Regression for 1.0.1: pieces used to drift from the field in exports."""
     layout = fit_field_rect((0, 0, REFERENCE_W, REFERENCE_H), 'half')
-    # place a piece exactly on the crease/goal center (a fixed field landmark)
-    goal_x = layout['x']  # half field: goal sits at DIST_GOAL yards from x=layout['x']
-    from config import DIST_GOAL
-    goal_x = layout['x'] + DIST_GOAL * layout['s']
-    goal_y = layout['y'] + layout['h'] / 2
-    on_goal = Piece.create('X', (goal_x, goal_y))
+    on_goal = Piece.create('X', (layout['x'] + DIST_GOAL * layout['s'], layout['y'] + layout['h'] / 2))
+    for width, height in [(REFERENCE_W, REFERENCE_H), (EXPORT_WIDTH, EXPORT_HEIGHT), (600, 900)]:
+        image = render_frame_image(width, height, 'half', 0, [on_goal], {}, [], piece_label_font())
+        pixels = qimage_to_rgb_array(image)
+        piece_centre = colour_centroid(pixels, OFFENSE_COLOR)
+        crease_centre = colour_centroid(pixels, CREASE_COLOR)
+        assert piece_centre and crease_centre, f"{width}x{height}: piece or crease not found"
+        assert math.dist(piece_centre, crease_centre) < 3, f"{width}x{height}: piece drifted off the crease"
 
-    def find_centroid(surface, w, h, color, step=2):
-        xs, ys = [], []
-        for x in range(0, w, step):
-            for y in range(0, h, step):
-                r, g, b = surface.get_at((x, y))[:3]
-                if abs(r - color[0]) < 10 and abs(g - color[1]) < 10 and abs(b - color[2]) < 10:
-                    xs.append(x); ys.append(y)
-        return (sum(xs) / len(xs), sum(ys) / len(ys)) if xs else None
 
-    from config import OFFENSE_COLOR, CREASE_COLOR
-    for (ow, oh, label) in [(REFERENCE_W, REFERENCE_H, "editor-size"), (EXPORT_WIDTH, EXPORT_HEIGHT, "export-size")]:
-        surf, _ = compose_frame(ow, oh, 'half', 0, [on_goal], {on_goal.id: on_goal.pos}, [], app.piece_font, (18, 18, 20))
-        piece_centroid = find_centroid(surf, ow, oh, OFFENSE_COLOR)
-        crease_centroid = find_centroid(surf, ow, oh, CREASE_COLOR)
-        assert piece_centroid and crease_centroid, f"{label}: couldn't find piece or crease"
-        dist = ((piece_centroid[0] - crease_centroid[0]) ** 2 + (piece_centroid[1] - crease_centroid[1]) ** 2) ** 0.5
-        assert dist < 5, f"{label}: piece drifted {dist:.1f}px from the crease it was placed on!"
-        print(f"{label}: piece stayed aligned with crease (offset {dist:.2f}px)")
-    print("Editor/export alignment regression test passed")
+def test_board_view_turns_a_mouse_drag_into_a_piece_move():
+    window = MainWindow()
+    window.show()
+    board = window.board
+    piece = Piece.create('X', (300, 300))
+    window.editor.pieces.append(piece)
+    window.editor.rotation_deg = 30
 
-    # --- rotation + round trip through the scene composer --------------
-    app.rotation_deg = 35
-    app.draw()
-    print("draw() with rotation=35 OK")
-    app.field_mode = 'full'
-    app.draw()
-    app.field_mode = 'half'
-    print("Field mode toggle with rotation OK")
+    def screen_point(reference_point):
+        x, y = view_transform(board.width(), board.height(), 30).map(*reference_point)
+        return QPoint(round(x), round(y))
 
-    # --- preview ---------------------------------------------------------
-    app.start_preview()
-    for _ in range(5):
-        app.update_preview(0.05)
-        app.draw()
-    app.previewing = False
-    print("Preview OK")
+    QTest.mousePress(board, Qt.LeftButton, Qt.NoModifier, screen_point((300, 300)))
+    QTest.mouseMove(board, screen_point((400, 350)))
+    QTest.mouseRelease(board, Qt.LeftButton, Qt.NoModifier, screen_point((400, 350)))
+    assert math.dist(piece.pos, (400, 350)) < 2, f"piece ended at {piece.pos}"
+    window.close()
 
-    # --- export (rotation baked in) + folder creation --------------------
-    app.filename_input.text = "test_export"
-    app.rotation_deg = 20
-    app.export_video('mp4')
-    print("MP4 export status:", app.status_message)
-    assert os.path.isfile(os.path.join(EXPORTS_DIR, "test_export.mp4")), "mp4 not written into exports/ folder"
-    app.export_video('gif')
-    assert os.path.isfile(os.path.join(EXPORTS_DIR, "test_export.gif")), "gif not written into exports/ folder"
-    print("Exports folder OK:", os.listdir(EXPORTS_DIR))
 
-    # --- save/load round trip (rotation + ball) --------------------------
-    app.filename_input.text = "test_play"
-    app.save_play()
-    assert os.path.isfile(os.path.join(SAVES_DIR, "test_play.json")), "save file not written into saved_plays/ folder"
-    print("Save status:", app.status_message)
+# =================================================== window: steps/preview ==
+def test_window_add_step_preview_and_step_list():
+    window = MainWindow()
+    window.editor.pieces.append(Piece.create('X', (300, 300)))
+    window.add_step()
+    window.editor.pieces[0].pos = (450, 300)
+    window.add_step()
+    assert window.steps_list.count() == 2
+    window.preview()
+    assert window.board.is_previewing
+    window.board.stop_preview()
+    assert not window.board.is_previewing
+    window.close()
 
-    saved_piece_count = len(app.pieces)
-    saved_rotation = app.rotation_deg
-    app.pieces = []
-    app.steps.steps = []
-    app.rotation_deg = 0
-    app.load_play()
-    print("Load status:", app.status_message)
-    assert len(app.pieces) == saved_piece_count, "piece count mismatch after load"
-    assert app.rotation_deg == saved_rotation, "rotation did not round-trip through save/load"
-    assert app.get_ball() is not None, "ball did not round-trip through save/load"
-    print("Save/load round trip OK (including ball + rotation)")
 
-    print("ALL HEADLESS TESTS PASSED")
+# ================================================== export / save / load ==
+def _window_with_a_two_step_play():
+    window = MainWindow()
+    editor = window.editor
+    editor.pieces = [Piece.create('X', (300, 300)), Piece.create('O', (500, 300)),
+                     Piece.create('BALL', (310, 290))]
+    window.add_step()
+    editor.pieces[0].pos = (450, 300)
+    editor.pending_annotations.append(Annotation('arrow', RED, ((300, 300), (450, 300)),
+                                                 linked_piece_id=editor.pieces[0].id))
+    window.move_input.setValue(0.5)
+    window.hold_input.setValue(0.5)
+    window.add_step()
+    window.rotation_input.setValue(20)
+    return window
+
+
+def test_export_mp4_and_gif_with_correct_gif_timing():
+    from PIL import Image
+
+    window = _window_with_a_two_step_play()
+    window.play_name_input.setText("test_export")
+    window.export('mp4')
+    window.export('gif')
+    mp4_path = os.path.join(EXPORTS_DIR, "test_export.mp4")
+    gif_path = os.path.join(EXPORTS_DIR, "test_export.gif")
+    assert os.path.getsize(mp4_path) > 0
+    # Pillow merges identical consecutive frames (the holds) into one longer
+    # frame, so check total running time rather than frame count.
+    with Image.open(gif_path) as gif:
+        gif_seconds = 0.0
+        for index in range(gif.n_frames):
+            gif.seek(index)
+            gif_seconds += gif.info["duration"] / 1000
+    play_seconds = window.editor.steps.total_duration()
+    assert abs(gif_seconds - play_seconds) < 0.1, f"GIF runs {gif_seconds:.2f}s; the play is {play_seconds:.2f}s"
+    window.close()
+
+
+def test_save_and_load_round_trip_through_the_window():
+    window = _window_with_a_two_step_play()
+    window.play_name_input.setText("test_play")
+    window.save_play()
+    assert os.path.isfile(os.path.join(SAVES_DIR, "test_play.json"))
+
+    saved_pieces = [(p.id, p.team, p.pos) for p in window.editor.pieces]
+    window.editor.new_play()
+    window.rotation_input.setValue(0)
+    window.load_play()
+
+    assert [(p.id, p.team, p.pos) for p in window.editor.pieces] == saved_pieces
+    assert window.editor.rotation_deg == 20 and window.rotation_input.value() == 20
+    assert window.steps_list.count() == 2
+    assert window.editor.steps.steps[1].annotations[0].linked_piece_id == saved_pieces[0][0]
+    window.close()
+
+
+def test_new_pieces_never_reuse_loaded_ids():
+    path = os.path.join(TEST_DATA_DIR, "ids.json")
+    persistence.save_play(path, [Piece(id=500, team='X', pos=(1, 1))], StepManager(), 'half')
+    editor = PlayEditor()
+    editor.replace_play(*persistence.load_play(path))
+    editor.set_tool(Tool.ADD_OFFENSE)
+    editor.press((50, 50))
+    assert editor.pieces[-1].id > 500
 
 
 if __name__ == "__main__":
+    tests = [(name, fn) for name, fn in globals().items() if name.startswith("test_") and callable(fn)]
     try:
-        main()
-    except Exception:
-        traceback.print_exc()
-        sys.exit(1)
+        for name, test in tests:
+            test()
+            print(f"ok  {name}")
+        print(f"ALL {len(tests)} HEADLESS TESTS PASSED")
     finally:
         shutil.rmtree(TEST_DATA_DIR, ignore_errors=True)
