@@ -1,18 +1,32 @@
-"""Entry point. When frozen into a standalone .exe (PyInstaller), any
-uncaught error is written to error_log.txt next to the executable and
-shown in a native popup, instead of the app just disappearing."""
+"""
+main.py - Entry point for the Coach Board Tool.
+===============================================
+
+When frozen into a standalone app (PyInstaller), any uncaught error is
+written to error_log.txt next to the executable and shown in a native
+popup, instead of the app silently disappearing.
+
+Author:  TCurrie11 (https://github.com/TCurrie11)
+Project: Coach Board Tool
+
+Version history:
+    1.0.0  2026-09-15  TCurrie11  Initial release.
+    1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+"""
 import os
 import sys
 import traceback
 
 
 def _base_dir():
+    """Folder the app runs from: next to the .exe/.app when frozen, else next to this file."""
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
 
 
 def main():
+    """Create the editor window and run it until the user closes it."""
     from app import App
     App().run()
 

@@ -1,3 +1,15 @@
+# =====================================================================
+# coach_board_tool.spec - PyInstaller build recipe for Coach Board Tool.
+#
+# Author:  TCurrie11 (https://github.com/TCurrie11)
+# Project: Coach Board Tool
+#
+# Version history:
+#     1.0.0  2026-09-15  TCurrie11  Initial release.
+#     1.1.0  2026-09-16  TCurrie11  macOS .app bundle (onedir + BUNDLE).
+#     1.1.1  2026-10-14  TCurrie11  Added file header and version history.
+# =====================================================================
+#
 # PyInstaller spec for Coach Board Tool.
 # Build with:  pyinstaller coach_board_tool.spec
 #

@@ -1,4 +1,19 @@
-"""Steps (keyframes) and turning them into a flat list of animation frames."""
+"""
+timeline.py - Steps (keyframes) and expanding them into animation frames.
+=========================================================================
+
+A play is a list of `Step`s. Each step stores where every piece ends up
+and how long to glide / hold. `generate_timeline_frames` interpolates
+between steps; a piece with a linked movement arrow follows that arrow's
+curve instead of a straight line.
+
+Author:  TCurrie11 (https://github.com/TCurrie11)
+Project: Coach Board Tool
+
+Version history:
+    1.0.0  2026-09-15  TCurrie11  Initial release.
+    1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+"""
 import math
 from dataclasses import dataclass, field as dc_field
 from draw_utils import smoothstep
@@ -6,6 +21,7 @@ from draw_utils import smoothstep
 
 @dataclass
 class Step:
+    """One keyframe of the play: where every piece ends up, and how long to glide there and hold."""
     positions: dict            # piece_id -> (x, y) at the END of this step
     annotations: list          # Annotation objects drawn while building this step
     move_duration: float = 1.0  # seconds to glide in from the previous step (0 for step 0)
@@ -13,20 +29,26 @@ class Step:
 
 
 class StepManager:
+    """Ordered list of steps that make up a play."""
+
     def __init__(self):
         self.steps = []
 
     def add_step(self, positions, annotations, move_duration, hold_duration):
+        """Append a step, copying the inputs so later edits don't leak into it."""
         self.steps.append(Step(dict(positions), list(annotations), move_duration, hold_duration))
 
     def delete_step(self, index):
+        """Remove the step at `index`; out-of-range indexes are ignored."""
         if 0 <= index < len(self.steps):
             self.steps.pop(index)
 
     def clear(self):
+        """Remove every step."""
         self.steps = []
 
     def total_duration(self):
+        """Total playback length in seconds. The first step has no glide-in, only a hold."""
         total = 0.0
         for i, s in enumerate(self.steps):
             total += (s.move_duration if i > 0 else 0.0) + s.hold_duration
@@ -34,6 +56,7 @@ class StepManager:
 
 
 def _path_lengths(path):
+    """Cumulative arc length at each point of the path, starting at 0."""
     dists = [0.0]
     for a, b in zip(path, path[1:]):
         dists.append(dists[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
@@ -41,6 +64,7 @@ def _path_lengths(path):
 
 
 def _point_along_path(path, t, lengths):
+    """Point at fraction `t` of the path's total arc length (constant speed along the curve)."""
     if len(path) == 1:
         return path[0]
     total = lengths[-1]

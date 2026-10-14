@@ -1,10 +1,21 @@
-"""Field layout and drawing, oriented horizontally (attack runs left/right)
-so exported clips fill a landscape slide well.
+"""
+field.py - Lacrosse field layout and drawing.
+=============================================
 
-Coordinates: x = length axis (toward a goal), y = width axis (sideline to
-sideline). For 'half' mode the center line sits at the left edge of the
-playable rect and the end line at the right edge. For 'full' mode the
-center line sits in the middle with an end/goal at each side.
+The field is oriented horizontally (attack runs left/right) so exported
+clips fill a landscape slide.
+
+Coordinates: x is the length axis (toward a goal), y is the width axis
+(sideline to sideline). In 'half' mode the centre line sits at the left
+edge of the playable rect and the end line at the right edge. In 'full'
+mode the centre line sits in the middle with a goal at each end.
+
+Author:  TCurrie11 (https://github.com/TCurrie11)
+Project: Coach Board Tool
+
+Version history:
+    1.0.0  2026-09-15  TCurrie11  Initial release.
+    1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
 """
 import pygame
 from config import (
@@ -43,6 +54,7 @@ def fit_field_rect(container, mode):
 
 
 def draw_field(surface, layout):
+    """Paint the whole field described by `layout`. Returns the field's (x0, y0, x1, y1) bounds."""
     x, y, w, s, mode = layout['x'], layout['y'], layout['w'], layout['s'], layout['mode']
     field_h = layout['h']
     x0, x1 = x, x + w
@@ -69,6 +81,7 @@ def draw_field(surface, layout):
 
 
 def _draw_end(surface, y0, y1, cx, s, direction):
+    """Paint one attacking end of the field. `direction` is +1 for the right-hand end, -1 for the left."""
     d = direction
     wing_edge = cx + d * WING_INSET_YD * s
     restrain_x = cx + d * DIST_RESTRAIN * s
@@ -100,6 +113,7 @@ def _draw_end(surface, y0, y1, cx, s, direction):
 
 
 def _draw_subbox(surface, y1, x0, x1, s):
+    """Paint the substitution box and coaches' area below the sideline between x0 and x1."""
     x0, x1 = sorted((x0, x1))
     depth1 = SUBBOX_DEPTH_YD * s
     depth2 = COACH_DEPTH_YD * s

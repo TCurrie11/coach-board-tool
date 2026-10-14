@@ -1,4 +1,21 @@
-"""Main application: the editor window, tool state, and the sidebar UI."""
+"""
+app.py - Main application window: tool state, mouse handling and the sidebar UI.
+================================================================================
+
+Owns the editor loop. Every frame it composes the field + pieces +
+annotations via `scene.compose_frame`, draws the sidebar, and routes mouse
+and keyboard input to whichever tool is active (select, add piece, arrow,
+pass, pick, delete). Steps, preview, export and save/load are all driven
+from here.
+
+Author:  TCurrie11 (https://github.com/TCurrie11)
+Project: Coach Board Tool
+
+Version history:
+    1.0.0  2026-09-15  TCurrie11  Initial release.
+    1.0.1  2026-09-15  TCurrie11  Editor and export now share one reference canvas so pieces stay aligned with the field.
+    1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+"""
 import math
 import os
 import sys

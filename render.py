@@ -1,4 +1,17 @@
-"""Drawing routines for pieces and annotations."""
+"""
+render.py - Drawing routines for pieces and annotations.
+========================================================
+
+Pure drawing: given a surface and a piece/annotation, paint it. No
+state and no layout logic - positions arrive already in canvas space.
+
+Author:  TCurrie11 (https://github.com/TCurrie11)
+Project: Coach Board Tool
+
+Version history:
+    1.0.0  2026-09-15  TCurrie11  Initial release.
+    1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+"""
 import pygame
 from config import (
     OFFENSE_COLOR, DEFENSE_COLOR, BALL_COLOR, WHITE, BLACK, YELLOW,
@@ -8,6 +21,7 @@ from draw_utils import draw_dashed_line, draw_arrowhead
 
 
 def draw_piece(surface, team, pos, font, selected=False):
+    """Draw one player or the ball at `pos`, with a yellow ring if `selected`."""
     p = (int(pos[0]), int(pos[1]))
     if team == 'BALL':
         pygame.draw.circle(surface, BLACK, p, BALL_RADIUS + 2)
@@ -25,6 +39,7 @@ def draw_piece(surface, team, pos, font, selected=False):
 
 
 def draw_annotation(surface, ann):
+    """Draw an arrow (solid), pass (dashed) or pick (triangle) annotation."""
     if ann.kind in ('arrow', 'pass'):
         pts = ann.points
         if len(pts) < 2:
