@@ -13,6 +13,7 @@ Version history:
     1.0.0  2026-09-15  TCurrie11  Initial release.
     1.0.1  2026-09-15  TCurrie11  Editor and export now share one reference canvas so pieces stay aligned with the field.
     1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+    1.1.2  2026-10-14  TCurrie11  COACH_BOARD_DATA_DIR environment override for output folders.
 """
 import os
 import sys
@@ -63,9 +64,11 @@ def _base_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
-BASE_DIR = _base_dir()
-EXPORTS_DIR = os.path.join(BASE_DIR, "exports")
-SAVES_DIR = os.path.join(BASE_DIR, "saved_plays")
+# COACH_BOARD_DATA_DIR redirects all output (used by the test suite so it
+# never touches a coach's real saved plays or exports).
+DATA_DIR = os.environ.get("COACH_BOARD_DATA_DIR") or _base_dir()
+EXPORTS_DIR = os.path.join(DATA_DIR, "exports")
+SAVES_DIR = os.path.join(DATA_DIR, "saved_plays")
 
 # --- Fixed internal coordinate space -------------------------------------
 # Pieces/annotations are always laid out at this size; compose_frame scales

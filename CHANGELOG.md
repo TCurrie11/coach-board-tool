@@ -5,6 +5,11 @@ All notable changes to Coach Board Tool. Versions follow
 
 Author: [TCurrie11](https://github.com/TCurrie11)
 
+## 1.1.2 - 2026-10-14
+- **Fix:** the test suite deleted the real `exports/` and `saved_plays/`
+  folders. It now writes to a temporary folder via the new
+  `COACH_BOARD_DATA_DIR` environment override, and cleans up after itself.
+
 ## 1.1.1 - 2026-10-14
 - Every source file now has a header with its purpose, author and version history.
 - Docstrings for all public functions and classes.
