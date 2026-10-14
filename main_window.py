@@ -15,6 +15,7 @@ Project: Coach Board Tool
 Version history:
     2.0.0  2026-10-14  TCurrie11  Initial version; replaces the pygame sidebar from app.py (1.x).
     2.1.0  2026-10-14  TCurrie11  Native open/save/export dialogs, recent files, unsaved-changes prompt, drag-and-drop.
+    2.1.2  2026-10-14  TCurrie11  Dialogs fall back to the home folder if the default folder can't be created.
 """
 import os
 
@@ -516,11 +517,16 @@ class MainWindow(QMainWindow):
             QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Save)
 
     def _remembered_directory(self, key, fallback):
+        """Last folder used for this kind of file, else `fallback` (created
+        if needed), else the home folder if `fallback` can't be created."""
         directory = self.settings.value(key)
         if directory and os.path.isdir(directory):
             return directory
-        os.makedirs(fallback, exist_ok=True)
-        return fallback
+        try:
+            os.makedirs(fallback, exist_ok=True)
+            return fallback
+        except OSError:
+            return os.path.expanduser("~")
 
     def _remember_directory(self, key, file_path):
         self.settings.setValue(key, os.path.dirname(os.path.abspath(file_path)))

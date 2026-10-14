@@ -7,6 +7,7 @@
 # Version history:
 #     1.1.0  2026-09-16  TCurrie11  Initial version: PyInstaller .app build.
 #     2.1.1  2026-10-14  TCurrie11  Runs the test suite on macOS and launches the built app with --smoke-test.
+#     2.1.2  2026-10-14  TCurrie11  Download is a folder with the app plus a READ ME FIRST guide for coaches.
 # =====================================================================
 name: Build macOS app
 
@@ -60,10 +61,16 @@ jobs:
         timeout-minutes: 5
         run: dist/CoachBoardTool.app/Contents/MacOS/CoachBoardTool --smoke-test
 
-      - name: Zip the .app bundle (ditto preserves the bundle structure correctly)
+      # What coaches receive: a "Coach Board Tool" folder holding the app and
+      # the first-launch instructions, zipped. ditto (not zip) preserves the
+      # .app bundle's structure, symlinks and permissions.
+      - name: Package the app with its READ ME FIRST guide
         run: |
+          mkdir -p "dist/Coach Board Tool"
+          ditto dist/CoachBoardTool.app "dist/Coach Board Tool/CoachBoardTool.app"
+          cp "packaging/macos/READ ME FIRST.txt" "dist/Coach Board Tool/"
           cd dist
-          ditto -c -k --keepParent CoachBoardTool.app CoachBoardTool-macos-appleSilicon.zip
+          ditto -c -k --keepParent "Coach Board Tool" CoachBoardTool-macos-appleSilicon.zip
 
       - name: Upload CoachBoardTool.app
         uses: actions/upload-artifact@v4

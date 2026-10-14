@@ -17,6 +17,7 @@ Project: Coach Board Tool
 
 Version history:
     2.1.1  2026-10-14  TCurrie11  Initial version.
+    2.1.2  2026-10-14  TCurrie11  Also checks the data folder is outside the app bundle and writable; optional log file for windowed builds.
 """
 import os
 import shutil
@@ -27,6 +28,31 @@ from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
 SMOKE_TEST_FLAG = "--smoke-test"
+# Optional file to copy the report into. Windowed apps (the Windows .exe)
+# have no console, so CI reads the result from here instead.
+LOG_PATH_ENV_VAR = "COACH_BOARD_SMOKE_LOG"
+
+
+def report(line):
+    """Print a line of the smoke-test report, and append it to the log file if one is set."""
+    print(line)
+    log_path = os.environ.get(LOG_PATH_ENV_VAR)
+    if log_path:
+        with open(log_path, "a") as log_file:
+            log_file.write(line + "\n")
+
+
+def _check_data_folder_is_writable():
+    """The default save/export folder must live outside the app bundle and
+    accept writes, or the first Save on a coach's Mac would fail."""
+    from config import DATA_DIR
+
+    if ".app" + os.sep in DATA_DIR:
+        raise RuntimeError(f"data folder is inside the app bundle: {DATA_DIR}")
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=DATA_DIR):
+        pass
+    report(f"Data folder OK: {DATA_DIR}")
 
 
 def run_smoke_test(app: QApplication) -> int:
@@ -39,10 +65,12 @@ def run_smoke_test(app: QApplication) -> int:
         from entities import Annotation, Piece
         from main_window import MainWindow
 
+        _check_data_folder_is_writable()
+
         window = MainWindow()
         window.show()
         app.processEvents()
-        print(f"Window opened on Qt platform '{app.platformName()}'")
+        report(f"Window opened on Qt platform '{app.platformName()}'")
 
         runner = Piece.create('X', (300, 300))
         window.editor.pieces = [runner, Piece.create('O', (500, 300)), Piece.create('BALL', (310, 290))]
@@ -54,7 +82,7 @@ def run_smoke_test(app: QApplication) -> int:
         window.hold_input.setValue(0.2)
         window.add_step()
         window.board.repaint()
-        print("Play built and drawn")
+        report("Play built and drawn")
 
         for video_format in ('mp4', 'gif'):
             path = os.path.join(output_dir, f"smoke.{video_format}")
@@ -62,15 +90,15 @@ def run_smoke_test(app: QApplication) -> int:
             window.export(video_format)
             if not os.path.isfile(path) or os.path.getsize(path) == 0:
                 raise RuntimeError(f"{video_format.upper()} export produced no file")
-            print(f"{video_format.upper()} export OK ({os.path.getsize(path)} bytes)")
+            report(f"{video_format.upper()} export OK ({os.path.getsize(path)} bytes)")
 
         window._confirm_discard_unsaved_changes = lambda: True  # quit without the save prompt
         window.close()
-        print("SMOKE TEST PASSED")
+        report("SMOKE TEST PASSED")
         return 0
     except Exception:
-        traceback.print_exc()
-        print("SMOKE TEST FAILED")
+        report(traceback.format_exc())
+        report("SMOKE TEST FAILED")
         return 1
     finally:
         shutil.rmtree(output_dir, ignore_errors=True)
