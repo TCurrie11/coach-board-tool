@@ -5,6 +5,14 @@ All notable changes to Coach Board Tool. Versions follow
 
 Author: [TCurrie11](https://github.com/TCurrie11)
 
+## 1.2.0 - 2026-10-14
+- Freehand arrows and passes are now properly cleaned up on release. The new
+  `path_smoothing` module resamples, denoises, simplifies (Ramer-Douglas-Peucker)
+  and refits (centripetal Catmull-Rom) the mouse path, removing hand wobble
+  while keeping intended bends. Near-straight drags snap to a straight line.
+- Arrowheads aim along the end of the curve instead of its last pixel.
+- `test_path_smoothing.py`: unit tests using simulated wobbly mouse drags.
+
 ## 1.1.2 - 2026-10-14
 - **Fix:** the test suite deleted the real `exports/` and `saved_plays/`
   folders. It now writes to a temporary folder via the new
