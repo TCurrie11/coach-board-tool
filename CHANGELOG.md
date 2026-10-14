@@ -5,6 +5,14 @@ All notable changes to Coach Board Tool. Versions follow
 
 Author: [TCurrie11](https://github.com/TCurrie11)
 
+## 2.1.3 - 2026-10-14
+- Releases are drafted automatically: pushing a `vX.Y.Z` tag builds and
+  tests the Mac and Windows apps and creates a draft GitHub release with
+  both downloads and coach-friendly notes, ready to review and publish.
+- The release is refused if the tag doesn't match `APP_VERSION` or the
+  changelog has no section for it. `vX.Y.Z-dryrun` tags test the pipeline
+  without drafting anything.
+
 ## 2.1.2 - 2026-10-14
 - The Mac download is now a **Coach Board Tool** folder with the app and a
   **READ ME FIRST.txt** guide: install, the one-off "Open Anyway" security

@@ -7,6 +7,7 @@
 # Version history:
 #     1.0.0  2026-09-15  TCurrie11  Initial version: PyInstaller .exe build.
 #     2.1.2  2026-10-14  TCurrie11  Runs the test suite on Windows and launches the built exe with --smoke-test.
+#     2.1.3  2026-10-14  TCurrie11  Reusable from release.yml (workflow_call).
 # =====================================================================
 name: Build Windows exe
 
@@ -18,6 +19,7 @@ on:
   push:
     branches: [ main, master ]
   workflow_dispatch: {}
+  workflow_call: {}     # lets release.yml reuse this build
 
 jobs:
   build-windows-exe:

@@ -1,0 +1,89 @@
+# =====================================================================
+# release.yml - Build both apps and draft a GitHub release from a tag.
+#
+# To release version X.Y.Z:
+#   1. Set APP_VERSION = "X.Y.Z" in config.py and add a
+#      "## X.Y.Z - <date>" section to CHANGELOG.md. Commit and push.
+#   2. git tag vX.Y.Z && git push origin vX.Y.Z
+#   3. This workflow builds and tests both apps, then creates a DRAFT
+#      release with both downloads attached. Review it on GitHub and click
+#      Publish - nothing is public until you do.
+#
+# Push vX.Y.Z-dryrun instead to test the whole pipeline without drafting.
+#
+# Author:  TCurrie11 (https://github.com/TCurrie11)
+# Project: Coach Board Tool
+#
+# Version history:
+#     2.1.3  2026-10-14  TCurrie11  Initial version.
+# =====================================================================
+name: Draft release
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+jobs:
+  # Fail fast, before ~5 minutes of builds, if the tag, config.py and
+  # CHANGELOG.md don't agree.
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/release_notes.py "${{ github.ref_name }}" > /dev/null
+
+  # Reuse the normal build workflows, so a release gets exactly the same
+  # tests and smoke tests as every other build.
+  build-macos:
+    needs: check-version
+    uses: ./.github/workflows/build-macos.yml
+
+  build-windows:
+    needs: check-version
+    uses: ./.github/workflows/build-windows.yml
+
+  draft-release:
+    needs: [ build-macos, build-windows ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create the release
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: downloads
+
+      - name: Gather the files coaches download
+        run: |
+          mkdir release
+          cp downloads/CoachBoardTool-macos-appleSilicon/CoachBoardTool-macos-appleSilicon.zip release/
+          cp downloads/CoachBoardTool-windows/CoachBoardTool.exe release/CoachBoardTool-windows.exe
+          ls -l release
+
+      - name: Write release notes
+        run: |
+          python3 tools/release_notes.py "$TAG" > release-notes.md
+          cat release-notes.md
+
+      - name: Create draft release
+        if: ${{ !endsWith(github.ref_name, '-dryrun') }}
+        run: |
+          # Publishing a release can itself create this tag; don't draft a duplicate.
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "A release for $TAG already exists - nothing to do."
+            exit 0
+          fi
+          gh release create "$TAG" --draft --verify-tag \
+            --title "Coach Board Tool ${TAG#v}" \
+            --notes-file release-notes.md \
+            release/CoachBoardTool-macos-appleSilicon.zip \
+            release/CoachBoardTool-windows.exe
+
+      - name: Dry run - skipped creating the release
+        if: ${{ endsWith(github.ref_name, '-dryrun') }}
+        run: echo "Dry run for $TAG passed. Push the tag without '-dryrun' to draft the real release."

@@ -19,12 +19,13 @@ Version history:
     2.0.0  2026-10-14  TCurrie11  Qt UI: removed pygame window/sidebar sizes and widget colours; reference canvas size is now fixed explicitly.
     2.1.0  2026-10-14  TCurrie11  Added APP_ORGANIZATION for per-user settings.
     2.1.2  2026-10-14  TCurrie11  Packaged Mac app keeps its folders in ~/Documents/Coach Board Tool, not inside the .app.
+    2.1.3  2026-10-14  TCurrie11  Version bump for automated releases.
 """
 import os
 import sys
 
 APP_NAME = "Coach Board Tool"
-APP_VERSION = "2.1.2"
+APP_VERSION = "2.1.3"
 APP_ORGANIZATION = "TCurrie11"
 
 # --- Timing / export ---------------------------------------------------
