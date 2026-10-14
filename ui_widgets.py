@@ -1,4 +1,17 @@
-"""Minimal, dependency-free UI widgets for the sidebar."""
+"""
+ui_widgets.py - Minimal, dependency-free sidebar widgets.
+=========================================================
+
+`Button`, `TextInput` and a `Layout` helper that stacks rows top-down so
+the sidebar needs no hand-computed pixel offsets.
+
+Author:  TCurrie11 (https://github.com/TCurrie11)
+Project: Coach Board Tool
+
+Version history:
+    1.0.0  2026-09-15  TCurrie11  Initial release.
+    1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+"""
 import pygame
 from config import PANEL_TEXT, BUTTON_BG, BUTTON_BG_ACTIVE, BUTTON_BORDER
 

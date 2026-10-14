@@ -1,4 +1,19 @@
-"""Shared constants for the Coach Board Tool app."""
+"""
+config.py - Shared constants: window size, colours, field dimensions, folders.
+==============================================================================
+
+Everything tunable lives here so the rest of the code has no magic
+numbers. Field measurements are in yards and are converted to pixels by
+`field.fit_field_rect`.
+
+Author:  TCurrie11 (https://github.com/TCurrie11)
+Project: Coach Board Tool
+
+Version history:
+    1.0.0  2026-09-15  TCurrie11  Initial release.
+    1.0.1  2026-09-15  TCurrie11  Editor and export now share one reference canvas so pieces stay aligned with the field.
+    1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+"""
 import os
 import sys
 
@@ -42,6 +57,7 @@ BALL_RADIUS = 9
 
 # --- Output folders (created automatically next to the app / .exe) -----
 def _base_dir():
+    """Folder the app runs from: next to the .exe/.app when frozen, else next to this file."""
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))

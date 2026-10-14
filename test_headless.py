@@ -1,3 +1,20 @@
+"""
+test_headless.py - End-to-end smoke test that runs without a display.
+=====================================================================
+
+Drives the real `App` with SDL's dummy video driver: places pieces,
+draws arrows, builds steps, previews, exports MP4/GIF and round-trips a
+save file. Run with `python test_headless.py`; exits non-zero on failure.
+
+Author:  TCurrie11 (https://github.com/TCurrie11)
+Project: Coach Board Tool
+
+Version history:
+    1.0.0  2026-09-15  TCurrie11  Initial release.
+    1.0.1  2026-09-15  TCurrie11  Editor and export now share one reference canvas so pieces stay aligned with the field.
+    1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+"""
+
 import os
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")

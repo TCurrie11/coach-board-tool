@@ -1,9 +1,24 @@
-"""Generic drawing / math helpers used across the app."""
+"""
+draw_utils.py - Generic drawing and geometry helpers.
+=====================================================
+
+Dashed lines, arrowheads, hit-testing against line segments, easing,
+and the freehand-to-smooth-curve conversion used by the arrow and pass
+tools.
+
+Author:  TCurrie11 (https://github.com/TCurrie11)
+Project: Coach Board Tool
+
+Version history:
+    1.0.0  2026-09-15  TCurrie11  Initial release.
+    1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+"""
 import math
 import pygame
 
 
 def draw_dashed_line(surface, color, start, end, width=2, dash_len=8, gap_len=6):
+    """Draw a straight dashed line from `start` to `end`."""
     x1, y1 = start
     x2, y2 = end
     total = math.hypot(x2 - x1, y2 - y1)
@@ -23,6 +38,7 @@ def draw_dashed_line(surface, color, start, end, width=2, dash_len=8, gap_len=6)
 
 
 def draw_arrowhead(surface, color, p0, p1, length=14, spread_deg=28):
+    """Draw a filled triangular arrowhead at `p1`, pointing in the direction p0 -> p1."""
     ang = math.atan2(p1[1] - p0[1], p1[0] - p0[0])
     a1 = ang + math.pi - math.radians(spread_deg)
     a2 = ang + math.pi + math.radians(spread_deg)
@@ -32,6 +48,7 @@ def draw_arrowhead(surface, color, p0, p1, length=14, spread_deg=28):
 
 
 def point_near_segment(pos, a, b, tol=6):
+    """Return True if `pos` lies within `tol` pixels of the line segment a-b."""
     px, py = pos
     ax, ay = a
     bx, by = b
@@ -65,6 +82,7 @@ def _downsample(points, min_dist=10):
 
 
 def _catmull_rom(p0, p1, p2, p3, t):
+    """Evaluate the Catmull-Rom segment between p1 and p2 at parameter t in [0, 1]."""
     t2, t3 = t * t, t * t * t
     x = 0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t +
                (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
@@ -95,6 +113,7 @@ def smooth_path(raw_points, min_dist=10, samples_per_seg=10):
 
 
 def point_near_polyline(pos, points, tol=7):
+    """Return True if `pos` lies within `tol` pixels of any segment of the polyline."""
     for a, b in zip(points, points[1:]):
         if point_near_segment(pos, a, b, tol):
             return True
