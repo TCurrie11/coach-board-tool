@@ -5,6 +5,12 @@ All notable changes to Coach Board Tool. Versions follow
 
 Author: [TCurrie11](https://github.com/TCurrie11)
 
+## 2.1.1 - 2026-10-14
+- `--smoke-test` flag: opens the window, draws a play and exports MP4/GIF,
+  then exits 0 or 1. Used to check packaged builds.
+- The macOS CI build now runs the full test suite on macOS and launches the
+  finished `.app` with `--smoke-test`, so a broken bundle fails the build.
+
 ## 2.1.0 - 2026-10-14
 - Native **Open / Save / Save as** dialogs replace the file-name text box;
   export also asks where to save. Dialogs remember the last folder used.

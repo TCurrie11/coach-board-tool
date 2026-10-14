@@ -23,7 +23,7 @@ import os
 import sys
 
 APP_NAME = "Coach Board Tool"
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.1.1"
 APP_ORGANIZATION = "TCurrie11"
 
 # --- Timing / export ---------------------------------------------------
