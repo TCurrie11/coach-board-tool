@@ -29,10 +29,11 @@ Project: Coach Board Tool
 
 Version history:
     1.2.0  2026-10-14  TCurrie11  Initial version; replaces the old jitter-preserving smoother.
+    2.0.0  2026-10-14  TCurrie11  distance_to_segment moved to geometry.py.
 """
 import math
 
-Point = tuple[float, float]
+from geometry import Point, distance_to_segment
 
 DEFAULT_SAMPLE_SPACING = 4.0      # px between points while denoising
 DEFAULT_NOISE_WINDOW = 7          # points averaged together (odd number)
@@ -152,17 +153,6 @@ def point_at_distance_from_end(points: list[Point], distance: float) -> Point:
             return _lerp(later, earlier, remaining / segment_length)
         remaining -= segment_length
     return points[0]
-
-
-def distance_to_segment(point: Point, start: Point, end: Point) -> float:
-    """Shortest distance from `point` to the line segment start-end."""
-    dx, dy = end[0] - start[0], end[1] - start[1]
-    length_squared = dx * dx + dy * dy
-    if length_squared == 0:
-        return math.dist(point, start)
-    t = ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length_squared
-    t = max(0.0, min(1.0, t))
-    return math.dist(point, (start[0] + t * dx, start[1] + t * dy))
 
 
 def _lerp(a: Point, b: Point, t: float) -> Point:

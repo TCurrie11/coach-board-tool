@@ -13,10 +13,12 @@ Project: Coach Board Tool
 Version history:
     1.0.0  2026-09-15  TCurrie11  Initial release.
     1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+    2.0.0  2026-10-14  TCurrie11  smoothstep now imported from geometry.py.
 """
 import math
-from dataclasses import dataclass, field as dc_field
-from draw_utils import smoothstep
+from dataclasses import dataclass
+
+from geometry import smoothstep
 
 
 @dataclass

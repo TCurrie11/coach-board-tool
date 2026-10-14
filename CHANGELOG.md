@@ -5,6 +5,29 @@ All notable changes to Coach Board Tool. Versions follow
 
 Author: [TCurrie11](https://github.com/TCurrie11)
 
+## 2.0.0 - 2026-10-14
+Moved from pygame to Qt (PySide6).
+
+- **Look:** dark Fusion theme, grouped sidebar, tool buttons with icons drawn
+  by the board's own renderer, status bar, menus and keyboard shortcuts.
+- **Drawing:** everything is rendered as anti-aliased vectors through one
+  transform, so lines stay sharp at any window size, rotation or export size.
+  Pass dashes run continuously along the curve, pieces have a soft shadow,
+  and player letters stay upright when the field is rotated.
+- **Window:** freely resizable; hovering a piece highlights it in Select and
+  Delete modes; the cursor reflects the active tool.
+- **Export:** progress dialog with cancel; frames are streamed to the encoder
+  instead of being held in memory.
+- **Fix:** GIF exports played about 3x too slowly (frame delay was passed in
+  seconds; imageio expects milliseconds).
+- **Errors:** the crash dialog now works on every platform, not just Windows,
+  and also catches errors raised inside button handlers.
+- **Architecture:** the 570-line `App` class is split into `PlayEditor`
+  (editing rules, no UI), `BoardView` (field widget) and `MainWindow`
+  (controls). `draw_utils.py` is now `geometry.py`.
+- **Tests:** `test_headless.py` rewritten as 20 independent tests, including
+  click mapping under rotation and GIF timing. Saves from 1.x load unchanged.
+
 ## 1.2.0 - 2026-10-14
 - Freehand arrows and passes are now properly cleaned up on release. The new
   `path_smoothing` module resamples, denoises, simplifies (Ramer-Douglas-Peucker)

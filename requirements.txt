@@ -1,4 +1,4 @@
-pygame-ce>=2.5   # community fork of pygame; has prebuilt wheels for newer Python versions
+PySide6>=6.6       # Qt 6 UI toolkit (Fusion style, QPainter rendering, native dialogs)
 imageio>=2.31
 imageio-ffmpeg>=0.4.9
 numpy>=1.24
