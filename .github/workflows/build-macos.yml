@@ -1,3 +1,14 @@
+# =====================================================================
+# build-macos.yml - Build, test and smoke-test the macOS app in CI.
+#
+# Author:  TCurrie11 (https://github.com/TCurrie11)
+# Project: Coach Board Tool
+#
+# Version history:
+#     1.1.0  2026-09-16  TCurrie11  Initial version: PyInstaller .app build.
+#     2.1.1  2026-10-14  TCurrie11  Runs the test suite on macOS and launches the built app with --smoke-test.
+#     2.1.2  2026-10-14  TCurrie11  Download is a folder with the app plus a READ ME FIRST guide for coaches.
+# =====================================================================
 name: Build macOS app
 
 # Builds CoachBoardTool.app on a real Apple Silicon Mac (GitHub's own
@@ -35,13 +46,31 @@ jobs:
       - name: Pre-download ffmpeg (so it gets bundled into the app)
         run: python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"
 
+      - name: Run tests on macOS (from source)
+        run: |
+          python test_path_smoothing.py
+          python test_headless.py
+
       - name: Build with PyInstaller
         run: pyinstaller coach_board_tool.spec --noconfirm
 
-      - name: Zip the .app bundle (ditto preserves the bundle structure correctly)
+      # Launch the packaged app itself, on the Mac's real window system
+      # (cocoa), the same way a coach would. Fails the build if the bundle
+      # can't open its window, draw a play, or export MP4/GIF.
+      - name: Smoke-test the built app
+        timeout-minutes: 5
+        run: dist/CoachBoardTool.app/Contents/MacOS/CoachBoardTool --smoke-test
+
+      # What coaches receive: a "Coach Board Tool" folder holding the app and
+      # the first-launch instructions, zipped. ditto (not zip) preserves the
+      # .app bundle's structure, symlinks and permissions.
+      - name: Package the app with its READ ME FIRST guide
         run: |
+          mkdir -p "dist/Coach Board Tool"
+          ditto dist/CoachBoardTool.app "dist/Coach Board Tool/CoachBoardTool.app"
+          cp "packaging/macos/READ ME FIRST.txt" "dist/Coach Board Tool/"
           cd dist
-          ditto -c -k --keepParent CoachBoardTool.app CoachBoardTool-macos-appleSilicon.zip
+          ditto -c -k --keepParent "Coach Board Tool" CoachBoardTool-macos-appleSilicon.zip
 
       - name: Upload CoachBoardTool.app
         uses: actions/upload-artifact@v4

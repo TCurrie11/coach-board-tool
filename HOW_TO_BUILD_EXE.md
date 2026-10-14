@@ -30,10 +30,23 @@ whatever message you send along with the file.
 ## Getting the Mac app
 
 Wait for **"Build macOS app"** to finish, open that run, scroll to
-**Artifacts**, and download **CoachBoardTool-macos-appleSilicon**. Unzip it
-— `CoachBoardTool.app` is what you send coaches (it looks like one icon;
-double-clicking it will show a folder of internal files if you unzip it
-wrong — make sure you're looking at the `.app` itself, not its contents).
+**Artifacts**, and download **CoachBoardTool-macos-appleSilicon**. GitHub
+wraps every download in its own zip, so unzip it once — inside is
+**`CoachBoardTool-macos-appleSilicon.zip`**. *That* zip is what you send
+coaches, as-is. Don't unzip it on Windows/Linux and re-zip it: that can
+break the `.app` bundle inside.
+
+When a coach unzips it on their Mac they get a **Coach Board Tool** folder
+containing the app and a **READ ME FIRST.txt** that walks them through
+installing it and the one-off security step below, so you don't have to
+explain it yourself. (The guide's source is
+[packaging/macos/READ ME FIRST.txt](packaging/macos/READ%20ME%20FIRST.txt).)
+
+**Checked on a real Mac by CI:** before the zip is made, the workflow runs
+the full test suite on macOS and then launches the finished app with
+`--smoke-test`. That opens the real window, draws a play and exports an MP4
+and a GIF; if any of it fails, the build goes red instead of producing a
+broken download. The Windows workflow does the same for the `.exe`.
 
 **This build only covers Apple Silicon Macs (M1 and newer)** — the ones
 Apple has sold since late 2020. It will **not** run on an older Intel Mac.

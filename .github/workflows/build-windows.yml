@@ -1,3 +1,13 @@
+# =====================================================================
+# build-windows.yml - Build and smoke-test the Windows exe in CI.
+#
+# Author:  TCurrie11 (https://github.com/TCurrie11)
+# Project: Coach Board Tool
+#
+# Version history:
+#     1.0.0  2026-09-15  TCurrie11  Initial version: PyInstaller .exe build.
+#     2.1.2  2026-10-14  TCurrie11  Runs the test suite on Windows and launches the built exe with --smoke-test.
+# =====================================================================
 name: Build Windows exe
 
 # Builds CoachBoardTool.exe on a real Windows machine (GitHub's own runner)
@@ -28,8 +38,26 @@ jobs:
       - name: Pre-download ffmpeg (so it gets bundled into the exe)
         run: python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"
 
+      - name: Run tests on Windows (from source)
+        run: |
+          python test_path_smoothing.py
+          python test_headless.py
+
       - name: Build with PyInstaller
         run: pyinstaller coach_board_tool.spec --noconfirm
+
+      # Launch the packaged exe itself. It's a windowed app, so PowerShell
+      # must be told to wait for it, and its printed output isn't visible -
+      # the smoke test also writes its report to a log file we print here.
+      - name: Smoke-test the built exe
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          COACH_BOARD_SMOKE_LOG: ${{ runner.temp }}\smoke_test.log
+        run: |
+          $run = Start-Process -FilePath dist\CoachBoardTool.exe -ArgumentList '--smoke-test' -Wait -PassThru
+          if (Test-Path $env:COACH_BOARD_SMOKE_LOG) { Get-Content $env:COACH_BOARD_SMOKE_LOG }
+          if ($run.ExitCode -ne 0) { throw "Smoke test failed (exit code $($run.ExitCode))" }
 
       - name: Upload CoachBoardTool.exe
         uses: actions/upload-artifact@v4

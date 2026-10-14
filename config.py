@@ -18,12 +18,13 @@ Version history:
     1.2.0  2026-10-14  TCurrie11  Dropped PATH_SMOOTH_MIN_DIST; smoothing tuning now lives in path_smoothing.py.
     2.0.0  2026-10-14  TCurrie11  Qt UI: removed pygame window/sidebar sizes and widget colours; reference canvas size is now fixed explicitly.
     2.1.0  2026-10-14  TCurrie11  Added APP_ORGANIZATION for per-user settings.
+    2.1.2  2026-10-14  TCurrie11  Packaged Mac app keeps its folders in ~/Documents/Coach Board Tool, not inside the .app.
 """
 import os
 import sys
 
 APP_NAME = "Coach Board Tool"
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.1.2"
 APP_ORGANIZATION = "TCurrie11"
 
 # --- Timing / export ---------------------------------------------------
@@ -79,17 +80,26 @@ DEFAULT_HOLD_SECONDS = 1.0
 MIN_STEP_SECONDS = 0.05
 
 
-# --- Output folders (created automatically next to the app / .exe) -----
-def _base_dir():
-    """Folder the app runs from: next to the .exe/.app when frozen, else next to this file."""
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+# --- Output folders (default save/export locations, plus the error log) --
+def _default_data_dir():
+    """Where the app keeps its default folders and error log.
+
+    - Running from source: next to this file.
+    - Packaged Mac app: ~/Documents/Coach Board Tool. Never inside the .app -
+      macOS runs freshly downloaded apps from a temporary read-only copy
+      ("app translocation"), so anything written there would fail or vanish.
+    - Packaged Windows .exe: next to the .exe, where coaches expect it.
+    """
+    if not getattr(sys, 'frozen', False):
+        return os.path.dirname(os.path.abspath(__file__))
+    if sys.platform == 'darwin':
+        return os.path.join(os.path.expanduser("~"), "Documents", APP_NAME)
+    return os.path.dirname(sys.executable)
 
 
 # COACH_BOARD_DATA_DIR redirects all output (used by the test suite so it
 # never touches a coach's real saved plays or exports).
-DATA_DIR = os.environ.get("COACH_BOARD_DATA_DIR") or _base_dir()
+DATA_DIR = os.environ.get("COACH_BOARD_DATA_DIR") or _default_data_dir()
 EXPORTS_DIR = os.path.join(DATA_DIR, "exports")
 SAVES_DIR = os.path.join(DATA_DIR, "saved_plays")
 

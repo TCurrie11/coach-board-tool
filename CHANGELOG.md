@@ -5,6 +5,24 @@ All notable changes to Coach Board Tool. Versions follow
 
 Author: [TCurrie11](https://github.com/TCurrie11)
 
+## 2.1.2 - 2026-10-14
+- The Mac download is now a **Coach Board Tool** folder with the app and a
+  **READ ME FIRST.txt** guide: install, the one-off "Open Anyway" security
+  step (Sequoia and older macOS), where files go, and what to do on errors.
+- **Fix (Mac):** the packaged app kept its default folders and error log
+  *inside* the `.app`. macOS runs freshly downloaded apps from a read-only
+  copy, so this could break saving. They now live in
+  `Documents/Coach Board Tool`. Dialogs fall back to the home folder if the
+  default folder can't be created.
+- The Windows CI build now also runs the test suite and smoke-tests the
+  finished `.exe`. The smoke test also checks the data folder is writable.
+
+## 2.1.1 - 2026-10-14
+- `--smoke-test` flag: opens the window, draws a play and exports MP4/GIF,
+  then exits 0 or 1. Used to check packaged builds.
+- The macOS CI build now runs the full test suite on macOS and launches the
+  finished `.app` with `--smoke-test`, so a broken bundle fails the build.
+
 ## 2.1.0 - 2026-10-14
 - Native **Open / Save / Save as** dialogs replace the file-name text box;
   export also asks where to save. Dialogs remember the last folder used.

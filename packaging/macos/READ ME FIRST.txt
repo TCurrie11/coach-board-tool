@@ -1,0 +1,52 @@
+COACH BOARD TOOL FOR MAC - READ ME FIRST
+========================================
+
+Works on Macs with Apple chips (M1 or newer). It won't open on an older
+Intel Mac. To check: Apple menu > About This Mac. If it says "Chip: Apple
+M...", you're good.
+
+
+1. INSTALL
+----------
+Drag "CoachBoardTool" into your Applications folder.
+
+
+2. OPEN IT THE FIRST TIME (one-off security step)
+-------------------------------------------------
+This app comes from an independent developer rather than the App Store, so
+the first time you open it your Mac will block it. That's expected - here's
+how to allow it. You only need to do this once.
+
+  a) Double-click CoachBoardTool. A message says it "cannot be opened" or
+     "Apple could not verify" it. Click "Done" (NOT "Move to Trash").
+
+  b) Open the Apple menu > System Settings > Privacy & Security.
+
+  c) Scroll down to the "Security" section. Next to a line mentioning
+     CoachBoardTool, click "Open Anyway". Enter your password or use
+     Touch ID if asked.
+
+  d) Double-click CoachBoardTool again and click "Open" if asked.
+     From now on it opens normally.
+
+  Older Macs (macOS 14 Sonoma or earlier) have a shortcut: hold Control,
+  click the app, choose "Open", then click "Open" again. If you don't see
+  an "Open" button that way, use steps a-d above.
+
+
+3. WHERE YOUR FILES GO
+----------------------
+When you save a play or export a video, the app asks where to put it.
+By default it suggests:  Documents > Coach Board Tool
+
+  - Saved plays (.json) can be reopened with File > Open, or by dragging
+    them onto the app window.
+  - Videos (.mp4) go into PowerPoint or Keynote with Insert > Video.
+    GIFs go in with Insert > Picture.
+
+
+4. IF SOMETHING GOES WRONG
+--------------------------
+If the app hits a problem it shows a message and saves the details to
+Documents > Coach Board Tool > error_log.txt. Send that file to whoever
+gave you the app.
