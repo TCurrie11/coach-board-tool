@@ -14,6 +14,7 @@ Version history:
     1.0.1  2026-09-15  TCurrie11  Editor and export now share one reference canvas so pieces stay aligned with the field.
     1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
     1.1.2  2026-10-14  TCurrie11  COACH_BOARD_DATA_DIR environment override for output folders.
+    1.2.0  2026-10-14  TCurrie11  Dropped PATH_SMOOTH_MIN_DIST; smoothing tuning now lives in path_smoothing.py.
 """
 import os
 import sys
@@ -80,7 +81,6 @@ REFERENCE_H = WINDOW_HEIGHT - 2 * FIELD_MARGIN
 
 # --- Freehand-to-smooth-arrow tuning ------------------------------------
 FREEHAND_MIN_DRAG = 6      # px - below this, treat as a click, not a drag
-PATH_SMOOTH_MIN_DIST = 10  # px - jitter filter before spline fitting
 
 # --- Field dimensions (yards), horizontal orientation -------------------
 # x-axis = length (toward the goal), y-axis = sideline-to-sideline width.

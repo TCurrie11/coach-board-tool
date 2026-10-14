@@ -14,6 +14,7 @@ Version history:
     1.0.1  2026-09-15  TCurrie11  Editor and export now share one reference canvas so pieces stay aligned with the field.
     1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
     1.1.2  2026-10-14  TCurrie11  Test output goes to a temp folder; no longer deletes real saves/exports.
+    1.2.0  2026-10-14  TCurrie11  Uses smooth_freehand_path.
 """
 
 import os
@@ -58,11 +59,11 @@ def main():
     ball_pos_step0 = app.steps.steps[0].positions[ball.id]
 
     # --- freehand smoothing -------------------------------------------
-    from draw_utils import smooth_path
+    from path_smoothing import smooth_freehand_path
     raw = [(0, 0), (20, 5), (40, 25), (60, 60), (90, 70), (120, 65)]
-    smoothed = smooth_path(raw, min_dist=10)
-    assert len(smoothed) >= len(raw), "smoothing should densify the path"
-    print(f"smooth_path: {len(raw)} raw points -> {len(smoothed)} smoothed points")
+    smoothed = smooth_freehand_path(raw)
+    assert smoothed[0] == raw[0] and smoothed[-1] == raw[-1], "smoothing must keep both endpoints"
+    print(f"smooth_freehand_path: {len(raw)} raw points -> {len(smoothed)} smoothed points")
 
     app.pending_annotations.append(Annotation('arrow', (205, 35, 35), tuple(smoothed), False))
     app.pending_annotations.append(Annotation('pick', (205, 35, 35), ((400, 350),), False))  # picks: persist=False now

@@ -11,6 +11,7 @@ Project: Coach Board Tool
 Version history:
     1.0.0  2026-09-15  TCurrie11  Initial release.
     1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+    1.2.0  2026-10-14  TCurrie11  Arrowheads aim along the curve's last 14 px, not its final segment.
 """
 import pygame
 from config import (
@@ -18,6 +19,9 @@ from config import (
     PIECE_RADIUS, PICK_SIZE, BALL_RADIUS,
 )
 from draw_utils import draw_dashed_line, draw_arrowhead
+from path_smoothing import point_at_distance_from_end
+
+ARROWHEAD_LENGTH = 14
 
 
 def draw_piece(surface, team, pos, font, selected=False):
@@ -52,7 +56,8 @@ def draw_annotation(surface, ann):
                 pygame.draw.line(surface, ann.color, pts[0], pts[1], 3)
             else:
                 pygame.draw.lines(surface, ann.color, False, pts, 3)
-        draw_arrowhead(surface, ann.color, pts[-2], pts[-1])
+        aim_from = point_at_distance_from_end(pts, ARROWHEAD_LENGTH)
+        draw_arrowhead(surface, ann.color, aim_from, pts[-1], length=ARROWHEAD_LENGTH)
     elif ann.kind == 'pick':
         p = ann.points[0]
         size = PICK_SIZE

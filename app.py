@@ -15,6 +15,7 @@ Version history:
     1.0.0  2026-09-15  TCurrie11  Initial release.
     1.0.1  2026-09-15  TCurrie11  Editor and export now share one reference canvas so pieces stay aligned with the field.
     1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+    1.2.0  2026-10-14  TCurrie11  Arrows and passes use the new path_smoothing pipeline on release.
 """
 import math
 import os
@@ -26,11 +27,12 @@ from config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, SIDEBAR_WIDTH, FIELD_MARGIN, FPS, EXPORT_FPS,
     EXPORT_WIDTH, EXPORT_HEIGHT, PANEL_BG, PANEL_TEXT, WHITE, BG_OUTSIDE_FIELD,
     OFFENSE_COLOR, DEFENSE_COLOR, PIECE_RADIUS, PICK_SIZE,
-    EXPORTS_DIR, SAVES_DIR, FREEHAND_MIN_DRAG, PATH_SMOOTH_MIN_DIST,
+    EXPORTS_DIR, SAVES_DIR, FREEHAND_MIN_DRAG,
 )
 from ui_widgets import Button, TextInput, Layout
 from entities import Piece, Annotation, set_counter_above
-from draw_utils import point_near_polyline, smooth_path
+from draw_utils import point_near_polyline
+from path_smoothing import smooth_freehand_path
 from timeline import StepManager, generate_timeline_frames
 from exporter import export_mp4, export_gif
 from scene import compose_frame, screen_to_canvas
@@ -298,7 +300,7 @@ class App:
             path = self.freehand_path
             total_len = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(path, path[1:]))
             if total_len > FREEHAND_MIN_DRAG:
-                smoothed = smooth_path(path, min_dist=PATH_SMOOTH_MIN_DIST)
+                smoothed = smooth_freehand_path(path)
                 color = self.color_for_point(path[0])
                 kind = 'pass' if self.mode == 'pass' else 'arrow'
                 linked_id = None
