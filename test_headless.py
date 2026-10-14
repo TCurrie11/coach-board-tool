@@ -13,15 +13,22 @@ Version history:
     1.0.0  2026-09-15  TCurrie11  Initial release.
     1.0.1  2026-09-15  TCurrie11  Editor and export now share one reference canvas so pieces stay aligned with the field.
     1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
+    1.1.2  2026-10-14  TCurrie11  Test output goes to a temp folder; no longer deletes real saves/exports.
 """
 
 import os
+import shutil
+import sys
+import tempfile
+import traceback
+
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
-import sys
-import shutil
-import traceback
+# Write every export/save into a throwaway folder, never the real
+# exports/ and saved_plays/ folders. Must be set before `config` is imported.
+TEST_DATA_DIR = tempfile.mkdtemp(prefix="coach_board_test_")
+os.environ["COACH_BOARD_DATA_DIR"] = TEST_DATA_DIR
 
 
 def main():
@@ -30,9 +37,7 @@ def main():
     from timeline import generate_timeline_frames
     from config import EXPORTS_DIR, SAVES_DIR
 
-    for d in (EXPORTS_DIR, SAVES_DIR):
-        if os.path.isdir(d):
-            shutil.rmtree(d)
+    assert EXPORTS_DIR.startswith(TEST_DATA_DIR), "test must not write to the real exports folder"
 
     app = App()
     print("App initialized OK")
@@ -225,3 +230,5 @@ if __name__ == "__main__":
     except Exception:
         traceback.print_exc()
         sys.exit(1)
+    finally:
+        shutil.rmtree(TEST_DATA_DIR, ignore_errors=True)
