@@ -6,19 +6,23 @@ Builds the sidebar controls and menus and wires them to the `PlayEditor`
 and `BoardView`. Holds no editing rules of its own - it reads values from
 widgets, calls the editor, and refreshes what's shown.
 
+Also owns the document lifecycle: which file the play belongs to, whether
+it has unsaved changes, native open/save/export dialogs and recent files.
+
 Author:  TCurrie11 (https://github.com/TCurrie11)
 Project: Coach Board Tool
 
 Version history:
     2.0.0  2026-10-14  TCurrie11  Initial version; replaces the pygame sidebar from app.py (1.x).
+    2.1.0  2026-10-14  TCurrie11  Native open/save/export dialogs, recent files, unsaved-changes prompt, drag-and-drop.
 """
 import os
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSettings, QSize, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
-    QAbstractSpinBox, QButtonGroup, QDoubleSpinBox, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QMainWindow, QMessageBox, QProgressDialog, QPushButton, QScrollArea, QSizePolicy, QToolButton,
+    QAbstractSpinBox, QButtonGroup, QDoubleSpinBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
+    QListWidget, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QScrollArea, QSizePolicy, QToolButton,
     QVBoxLayout, QWidget,
 )
 
@@ -49,7 +53,15 @@ TOOL_BUTTONS = [
 ]
 ROTATION_PRESETS = (0, 90, 180, 270)
 STEPS_LIST_HEIGHT = 104
-DEFAULT_PLAY_NAME = "my_play"
+UNTITLED_PLAY_NAME = "Untitled play"
+PLAY_FILE_FILTER = f"Coach Board plays (*{persistence.PLAY_FILE_SUFFIX})"
+VIDEO_FILE_FILTERS = {'mp4': "MP4 video (*.mp4)", 'gif': "Animated GIF (*.gif)"}
+MAX_RECENT_FILES = 8
+
+# QSettings keys (persisted per user by Qt in the platform's usual place)
+RECENT_FILES_KEY = "recentFiles"
+LAST_PLAY_DIR_KEY = "lastPlayDirectory"
+LAST_EXPORT_DIR_KEY = "lastExportDirectory"
 
 
 class ExportCancelled(Exception):
@@ -59,7 +71,8 @@ class ExportCancelled(Exception):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"{APP_NAME} {APP_VERSION}")
+        self.settings = QSettings()
+        self.current_file_path = None     # None until the play is saved or opened
         self.editor = PlayEditor()
         self.board = BoardView(self.editor)
         self.board.edited.connect(self._on_board_edited)
@@ -75,6 +88,8 @@ class MainWindow(QMainWindow):
 
         self._build_menus()
         self._refresh_steps_list()
+        self._mark_current_state_as_saved()
+        self.setAcceptDrops(True)
         self._show_status("Add players with X / O, draw runs and passes, then press Add step.")
         self.resize(1300, 820)
 
@@ -118,17 +133,15 @@ class MainWindow(QMainWindow):
         column.addWidget(_section_heading("PLAY"))
         column.addWidget(_button("Preview", self.preview, role="primary"))
         export_row = QHBoxLayout()
-        export_row.addWidget(_button("Export MP4", lambda: self.export('mp4')))
-        export_row.addWidget(_button("Export GIF", lambda: self.export('gif')))
+        export_row.addWidget(_button("Export MP4\u2026", lambda: self.export('mp4')))
+        export_row.addWidget(_button("Export GIF\u2026", lambda: self.export('gif')))
         column.addLayout(export_row)
 
         column.addWidget(_section_heading("FILE"))
-        self.play_name_input = QLineEdit(DEFAULT_PLAY_NAME)
-        self.play_name_input.setPlaceholderText("Play name")
-        column.addWidget(self.play_name_input)
         file_row = QHBoxLayout()
-        file_row.addWidget(_button("Save play", self.save_play))
-        file_row.addWidget(_button("Load play", self.load_play))
+        file_row.addWidget(_button("Open\u2026", self.open_play))
+        file_row.addWidget(_button("Save", self.save_play))
+        file_row.addWidget(_button("Save as\u2026", self.save_play_as))
         column.addLayout(file_row)
         column.addStretch()
 
@@ -184,11 +197,16 @@ class MainWindow(QMainWindow):
     # ============================================================== menus ==
     def _build_menus(self):
         file_menu = self.menuBar().addMenu("&File")
-        _add_action(file_menu, self, "&Save play", QKeySequence.Save, self.save_play)
-        _add_action(file_menu, self, "&Load play", QKeySequence.Open, self.load_play)
+        _add_action(file_menu, self, "&New play", QKeySequence.New, self.new_play)
+        _add_action(file_menu, self, "&Open\u2026", QKeySequence.Open, self.open_play)
+        self.recent_files_menu = file_menu.addMenu("Open &recent")
+        self.recent_files_menu.aboutToShow.connect(self._rebuild_recent_files_menu)
         file_menu.addSeparator()
-        _add_action(file_menu, self, "Export &MP4", "Ctrl+E", lambda: self.export('mp4'))
-        _add_action(file_menu, self, "Export &GIF", "Ctrl+Shift+E", lambda: self.export('gif'))
+        _add_action(file_menu, self, "&Save", QKeySequence.Save, self.save_play)
+        _add_action(file_menu, self, "Save &as\u2026", QKeySequence.SaveAs, self.save_play_as)
+        file_menu.addSeparator()
+        _add_action(file_menu, self, "Export &MP4\u2026", "Ctrl+E", lambda: self.export('mp4'))
+        _add_action(file_menu, self, "Export &GIF\u2026", "Ctrl+Shift+E", lambda: self.export('gif'))
         file_menu.addSeparator()
         _add_action(file_menu, self, "&Quit", QKeySequence.Quit, self.close)
 
@@ -207,10 +225,12 @@ class MainWindow(QMainWindow):
     def _set_field_mode(self, mode):
         self.editor.field_mode = mode
         self.board.update()
+        self._refresh_unsaved_indicator()
 
     def _set_rotation(self, degrees):
         self.editor.rotation_deg = degrees
         self.board.update()
+        self._refresh_unsaved_indicator()
 
     def _set_draw_team(self, team):
         self.editor.draw_team = team
@@ -221,6 +241,7 @@ class MainWindow(QMainWindow):
 
     def _on_board_edited(self):
         self.board.update()
+        self._refresh_unsaved_indicator()
 
     # ============================================================== steps ==
     def add_step(self):
@@ -278,6 +299,7 @@ class MainWindow(QMainWindow):
         self.steps_list.setCurrentRow(keep_row)
         self.steps_list.blockSignals(False)
         self._on_step_selected(keep_row)
+        self._refresh_unsaved_indicator()
 
     # ============================================================ preview ==
     def preview(self):
@@ -292,8 +314,13 @@ class MainWindow(QMainWindow):
         if not self.editor.steps.steps:
             self._show_status("Add at least one step first.")
             return
-        os.makedirs(EXPORTS_DIR, exist_ok=True)
-        path = os.path.join(EXPORTS_DIR, f"{self._play_name()}.{video_format}")
+        suggested = os.path.join(self._remembered_directory(LAST_EXPORT_DIR_KEY, EXPORTS_DIR),
+                                 f"{self._play_display_name()}.{video_format}")
+        path = self._ask_save_path(f"Export {video_format.upper()}", suggested,
+                                   VIDEO_FILE_FILTERS[video_format], f".{video_format}")
+        if not path:
+            return
+        self._remember_directory(LAST_EXPORT_DIR_KEY, path)
         frames = generate_timeline_frames(self.editor.steps.steps, fps=EXPORT_FPS)
 
         progress = QProgressDialog(f"Rendering {video_format.upper()}…", "Cancel", 0, len(frames), self)
@@ -308,7 +335,7 @@ class MainWindow(QMainWindow):
             return
         except Exception as error:
             _remove_if_exists(path)
-            QMessageBox.warning(self, "Export failed", f"Couldn't export the video:\n\n{error}")
+            self._show_warning("Export failed", f"Couldn't export the video:\n\n{error}")
             return
         finally:
             progress.close()
@@ -326,26 +353,74 @@ class MainWindow(QMainWindow):
                                      positions, annotations, label_font)
         progress.setValue(len(frames))
 
-    # ======================================================== save / load ==
-    def save_play(self):
-        os.makedirs(SAVES_DIR, exist_ok=True)
-        path = os.path.join(SAVES_DIR, f"{self._play_name()}.json")
-        persistence.save_play(path, self.editor.pieces, self.editor.steps,
-                              self.editor.field_mode, self.editor.rotation_deg)
-        self._show_status(f"Saved to {path}")
+    # ===================================================== open / save ==
+    def new_play(self):
+        if not self._confirm_discard_unsaved_changes():
+            return
+        self.editor.new_play()
+        self.current_file_path = None
+        self._sync_controls_with_editor()
+        self._mark_current_state_as_saved()
+        self._show_status("Started a new play.")
 
-    def load_play(self):
-        path = os.path.join(SAVES_DIR, f"{self._play_name()}.json")
+    def open_play(self):
+        """Ask for a play file and open it."""
+        if not self._confirm_discard_unsaved_changes():
+            return
+        path = self._ask_open_path("Open play", self._remembered_directory(LAST_PLAY_DIR_KEY, SAVES_DIR),
+                                   PLAY_FILE_FILTER)
+        if path:
+            self._load_play_from(path)
+
+    def open_play_file(self, path):
+        """Open a specific file (recent-files menu, drag-and-drop, command line)."""
+        if self._confirm_discard_unsaved_changes():
+            self._load_play_from(path)
+
+    def save_play(self):
+        """Save to the play's current file, asking for one if it has none.
+        Returns True if the play was saved."""
+        if self.current_file_path is None:
+            return self.save_play_as()
+        return self._write_play_to(self.current_file_path)
+
+    def save_play_as(self):
+        """Ask where to save the play, then save it there. Returns True if saved."""
+        suggested = self.current_file_path or os.path.join(
+            self._remembered_directory(LAST_PLAY_DIR_KEY, SAVES_DIR),
+            UNTITLED_PLAY_NAME + persistence.PLAY_FILE_SUFFIX)
+        path = self._ask_save_path("Save play as", suggested, PLAY_FILE_FILTER, persistence.PLAY_FILE_SUFFIX)
+        return bool(path) and self._write_play_to(path)
+
+    def _load_play_from(self, path):
         try:
             self.editor.replace_play(*persistence.load_play(path))
         except FileNotFoundError:
-            self._show_status(f"No saved play at {path}")
+            self._forget_recent_file(path)
+            self._show_warning("File not found", f"{path}\n\nno longer exists.")
             return
         except Exception as error:
-            QMessageBox.warning(self, "Load failed", f"Couldn't load {path}:\n\n{error}")
+            self._show_warning("Couldn't open play",
+                               f"{os.path.basename(path)} isn't a readable play file.\n\n{error}")
             return
+        self.current_file_path = path
         self._sync_controls_with_editor()
-        self._show_status(f"Loaded {path}")
+        self._mark_current_state_as_saved()
+        self._remember_file(path)
+        self._show_status(f"Opened {path}")
+
+    def _write_play_to(self, path):
+        try:
+            persistence.save_play(path, self.editor.pieces, self.editor.steps,
+                                  self.editor.field_mode, self.editor.rotation_deg)
+        except OSError as error:
+            self._show_warning("Couldn't save play", f"Couldn't write {path}:\n\n{error}")
+            return False
+        self.current_file_path = path
+        self._mark_current_state_as_saved()
+        self._remember_file(path)
+        self._show_status(f"Saved {path}")
+        return True
 
     def _sync_controls_with_editor(self):
         """Update widgets after the editor's state was replaced wholesale."""
@@ -357,8 +432,117 @@ class MainWindow(QMainWindow):
         self._refresh_steps_list()
         self.board.update()
 
-    def _play_name(self):
-        return self.play_name_input.text().strip() or DEFAULT_PLAY_NAME
+    # ================================================== unsaved changes ==
+    def _current_play_snapshot(self):
+        return persistence.serialize_play(self.editor.pieces, self.editor.steps,
+                                          self.editor.field_mode, self.editor.rotation_deg)
+
+    def _mark_current_state_as_saved(self):
+        self._saved_snapshot = self._current_play_snapshot()
+        self._refresh_window_title()
+
+    def has_unsaved_changes(self):
+        """True if the play differs from what was last saved or opened.
+        Comparing snapshots (rather than flagging every edit) means undoing
+        back to the saved state correctly counts as "no changes"."""
+        return self._current_play_snapshot() != self._saved_snapshot
+
+    def _refresh_unsaved_indicator(self):
+        if hasattr(self, "_saved_snapshot"):
+            self.setWindowModified(self.has_unsaved_changes())
+
+    def _refresh_window_title(self):
+        # Qt replaces "[*]" with an asterisk (or the macOS dot) while modified.
+        self.setWindowTitle(f"{self._play_display_name()}[*] \u2014 {APP_NAME}")
+        self._refresh_unsaved_indicator()
+
+    def _play_display_name(self):
+        if self.current_file_path is None:
+            return UNTITLED_PLAY_NAME
+        return os.path.splitext(os.path.basename(self.current_file_path))[0]
+
+    def _confirm_discard_unsaved_changes(self):
+        """Offer to save unsaved changes. Returns False if the user cancelled."""
+        if not self.has_unsaved_changes():
+            return True
+        choice = self._ask_save_changes()
+        if choice == QMessageBox.Save:
+            return self.save_play()
+        return choice == QMessageBox.Discard
+
+    # ======================================================= recent files ==
+    def recent_files(self):
+        return [path for path in (self.settings.value(RECENT_FILES_KEY) or []) if path]
+
+    def _remember_file(self, path):
+        path = os.path.abspath(path)
+        recent = [path] + [p for p in self.recent_files() if p != path]
+        self.settings.setValue(RECENT_FILES_KEY, recent[:MAX_RECENT_FILES])
+        self._remember_directory(LAST_PLAY_DIR_KEY, path)
+
+    def _forget_recent_file(self, path):
+        path = os.path.abspath(path)
+        self.settings.setValue(RECENT_FILES_KEY, [p for p in self.recent_files() if p != path])
+
+    def _rebuild_recent_files_menu(self):
+        self.recent_files_menu.clear()
+        for path in self.recent_files():
+            action = self.recent_files_menu.addAction(os.path.basename(path))
+            action.setToolTip(path)
+            action.triggered.connect(lambda _=False, p=path: self.open_play_file(p))
+        if self.recent_files_menu.isEmpty():
+            self.recent_files_menu.addAction("No recent plays").setEnabled(False)
+
+    # ================================================ dialogs and folders ==
+    # Each native dialog is wrapped in one small method so tests can replace it.
+    def _ask_open_path(self, title, directory, file_filter):
+        path, _ = QFileDialog.getOpenFileName(self, title, directory, file_filter)
+        return path
+
+    def _ask_save_path(self, title, suggested_path, file_filter, required_suffix):
+        """Native save dialog. Adds `required_suffix` if the user left it off."""
+        path, _ = QFileDialog.getSaveFileName(self, title, suggested_path, file_filter)
+        if path and not path.lower().endswith(required_suffix):
+            path += required_suffix
+        return path
+
+    def _show_warning(self, title, message):
+        QMessageBox.warning(self, title, message)
+
+    def _ask_save_changes(self):
+        return QMessageBox.question(
+            self, "Unsaved changes",
+            f"Save changes to \u201c{self._play_display_name()}\u201d before continuing?",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Save)
+
+    def _remembered_directory(self, key, fallback):
+        directory = self.settings.value(key)
+        if directory and os.path.isdir(directory):
+            return directory
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
+
+    def _remember_directory(self, key, file_path):
+        self.settings.setValue(key, os.path.dirname(os.path.abspath(file_path)))
+
+    # ===================================================== drag and drop ==
+    def dragEnterEvent(self, event):
+        if self._dropped_play_path(event) is not None:
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        path = self._dropped_play_path(event)
+        if path is not None:
+            event.acceptProposedAction()
+            self.open_play_file(path)
+
+    @staticmethod
+    def _dropped_play_path(event):
+        """Path of the first local play file being dragged in, or None."""
+        for url in event.mimeData().urls():
+            if url.isLocalFile() and url.toLocalFile().lower().endswith(persistence.PLAY_FILE_SUFFIX):
+                return url.toLocalFile()
+        return None
 
     # ============================================================== misc ==
     def _show_status(self, message):
@@ -371,6 +555,9 @@ class MainWindow(QMainWindow):
                           "By <a href='https://github.com/TCurrie11'>TCurrie11</a>")
 
     def closeEvent(self, event):
+        if not self._confirm_discard_unsaved_changes():
+            event.ignore()
+            return
         self.board.stop_preview()
         super().closeEvent(event)
 

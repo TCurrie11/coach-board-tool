@@ -76,21 +76,32 @@ colour. Otherwise it uses *Draw red* / *Draw blue*.
 **Preview** (`F5`) plays the sequence on the board. Click or press `Esc` to
 stop early.
 
-**Export MP4 / GIF** (`Ctrl+E` / `Ctrl+Shift+E`) renders the animation at
-1280×720 into an `exports/` folder next to the app, with a progress bar you
-can cancel. MP4 goes into PowerPoint via *Insert → Video*. GIF is a
-fallback (*Insert → Picture*).
+**Export MP4 / GIF** (`Ctrl+E` / `Ctrl+Shift+E`) asks where to save, then
+renders the animation at 1280×720 with a progress bar you can cancel. MP4
+goes into PowerPoint via *Insert → Video*. GIF is a fallback
+(*Insert → Picture*).
 
-**Save / Load play** (`Ctrl+S` / `Ctrl+O`) writes and reads a `.json` file in
-a `saved_plays/` folder, using the name in the *File* box. Plays saved by
-1.x open unchanged.
+**Files.** Plays are `.json` files, and plays saved by 1.x open unchanged.
+
+| Action | Shortcut | |
+|---|---|---|
+| New play | `Ctrl+N` | |
+| Open… | `Ctrl+O` | Native file picker. *File → Open recent* lists your last 8 plays. |
+| Save | `Ctrl+S` | Saves to the play's file; asks where the first time. |
+| Save as… | `Ctrl+Shift+S` | Save a copy under a new name or folder. |
+
+The window title shows the play's name and marks unsaved changes. Before
+closing, opening another play or starting a new one, you're asked whether
+to save. You can also drag a play file onto the window, or open one from
+the command line: `python main.py my_play.json`. Dialogs remember the last
+folder you used.
 
 ## 4. Project layout
 
 | Module | Responsibility |
 |---|---|
 | `main.py` | Entry point; error logging and crash dialog. |
-| `main_window.py` | Window, sidebar, menus and shortcuts; wires widgets to the editor. |
+| `main_window.py` | Window, sidebar, menus, shortcuts, file dialogs, recent files, unsaved-change tracking. |
 | `board_view.py` | The field widget: painting, mouse input, preview playback. |
 | `editor.py` | `PlayEditor`: what each tool does, undo, steps. No UI code. |
 | `scene.py` | Composes a frame and maps between screen and field coordinates. |

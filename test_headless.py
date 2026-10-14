@@ -5,8 +5,8 @@ test_headless.py - End-to-end tests that run without a display.
 Uses Qt's off-screen platform so the real editor, board widget, main
 window, renderer and exporter all run headless (e.g. in CI). Covers piece
 placement, freehand lines, steps, timeline animation, click mapping under
-rotation, field alignment at every output size, MP4/GIF export and
-save/load. Runs with plain `python test_headless.py` or under pytest; exits
+rotation, field alignment at every output size, MP4/GIF export,
+open/save dialogs, recent files and unsaved-change prompts. Runs with plain `python test_headless.py` or under pytest; exits
 non-zero on failure.
 
 Author:  TCurrie11 (https://github.com/TCurrie11)
@@ -19,6 +19,7 @@ Version history:
     1.1.2  2026-10-14  TCurrie11  Test output goes to a temp folder; no longer deletes real saves/exports.
     1.2.0  2026-10-14  TCurrie11  Uses smooth_freehand_path.
     2.0.0  2026-10-14  TCurrie11  Rewritten for the Qt UI as independent test functions; added rotation-mapping and GIF-timing tests.
+    2.1.0  2026-10-14  TCurrie11  Tests for file dialogs, unsaved-change tracking and recent files.
 """
 import math
 import os
@@ -34,11 +35,16 @@ TEST_DATA_DIR = tempfile.mkdtemp(prefix="coach_board_test_")
 os.environ["COACH_BOARD_DATA_DIR"] = TEST_DATA_DIR
 
 import numpy as np
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QPoint, QSettings, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
+# Keep test settings (recent files, last folders) out of the user's real ones.
+QSettings.setDefaultFormat(QSettings.IniFormat)
+QSettings.setPath(QSettings.IniFormat, QSettings.UserScope, TEST_DATA_DIR)
 APP = QApplication.instance() or QApplication(sys.argv)
+APP.setOrganizationName("CoachBoardToolTests")
+APP.setApplicationName("CoachBoardToolTests")
 
 import persistence
 from config import (
@@ -73,6 +79,37 @@ def bowed_path(start, end, bulge, samples=11):
     return [(start[0] + (end[0] - start[0]) * i / (samples - 1),
              start[1] + (end[1] - start[1]) * i / (samples - 1) - bulge * math.sin(math.pi * i / (samples - 1)))
             for i in range(samples)]
+
+
+def fake_dialogs(window, open_path="", save_path="", save_changes_answer=QMessageBox.Cancel):
+    """Replace the window's native dialogs and warning popups with canned
+    answers, and record which ones were shown."""
+    shown = []
+
+    def ask_open(*_):
+        shown.append("open")
+        return open_path
+
+    def ask_save(title, suggested, file_filter, suffix):
+        shown.append("save")
+        return save_path + suffix if save_path and not save_path.endswith(suffix) else save_path
+
+    def ask_save_changes():
+        shown.append("save changes?")
+        return save_changes_answer
+
+    window._ask_open_path = ask_open
+    window._ask_save_path = ask_save
+    window._ask_save_changes = ask_save_changes
+    window._show_warning = lambda title, message: shown.append(f"warning: {title}")
+    return shown
+
+
+def close_without_saving(window):
+    """Close a window, answering "Discard" if it asks about unsaved changes
+    (a real dialog would block the headless run forever)."""
+    fake_dialogs(window, save_changes_answer=QMessageBox.Discard)
+    window.close()
 
 
 def colour_centroid(rgb_array, colour, tolerance=10):
@@ -244,7 +281,7 @@ def test_board_view_turns_a_mouse_drag_into_a_piece_move():
     QTest.mouseMove(board, screen_point((400, 350)))
     QTest.mouseRelease(board, Qt.LeftButton, Qt.NoModifier, screen_point((400, 350)))
     assert math.dist(piece.pos, (400, 350)) < 2, f"piece ended at {piece.pos}"
-    window.close()
+    close_without_saving(window)
 
 
 # =================================================== window: steps/preview ==
@@ -259,7 +296,7 @@ def test_window_add_step_preview_and_step_list():
     assert window.board.is_previewing
     window.board.stop_preview()
     assert not window.board.is_previewing
-    window.close()
+    close_without_saving(window)
 
 
 # ================================================== export / save / load ==
@@ -283,11 +320,12 @@ def test_export_mp4_and_gif_with_correct_gif_timing():
     from PIL import Image
 
     window = _window_with_a_two_step_play()
-    window.play_name_input.setText("test_export")
+    mp4_path = os.path.join(TEST_DATA_DIR, "test_export.mp4")
+    gif_path = os.path.join(TEST_DATA_DIR, "test_export.gif")
+    fake_dialogs(window, save_path=mp4_path)
     window.export('mp4')
+    fake_dialogs(window, save_path=os.path.join(TEST_DATA_DIR, "test_export"))  # suffix added for us
     window.export('gif')
-    mp4_path = os.path.join(EXPORTS_DIR, "test_export.mp4")
-    gif_path = os.path.join(EXPORTS_DIR, "test_export.gif")
     assert os.path.getsize(mp4_path) > 0
     # Pillow merges identical consecutive frames (the holds) into one longer
     # frame, so check total running time rather than frame count.
@@ -298,25 +336,101 @@ def test_export_mp4_and_gif_with_correct_gif_timing():
             gif_seconds += gif.info["duration"] / 1000
     play_seconds = window.editor.steps.total_duration()
     assert abs(gif_seconds - play_seconds) < 0.1, f"GIF runs {gif_seconds:.2f}s; the play is {play_seconds:.2f}s"
-    window.close()
+    close_without_saving(window)
 
 
-def test_save_and_load_round_trip_through_the_window():
+def test_cancelling_the_export_dialog_writes_nothing():
     window = _window_with_a_two_step_play()
-    window.play_name_input.setText("test_play")
-    window.save_play()
-    assert os.path.isfile(os.path.join(SAVES_DIR, "test_play.json"))
+    shown = fake_dialogs(window, save_path="")
+    before = set(os.listdir(TEST_DATA_DIR))
+    window.export('mp4')
+    assert shown == ["save"] and set(os.listdir(TEST_DATA_DIR)) == before
+    close_without_saving(window)
 
+
+def test_first_save_asks_where_then_saves_in_place():
+    window = _window_with_a_two_step_play()
+    path = os.path.join(TEST_DATA_DIR, "zone_offense")
+    shown = fake_dialogs(window, save_path=path)
+    assert window.save_play()
+    assert window.current_file_path == path + ".json" and os.path.isfile(path + ".json")
+    assert window.windowTitle().startswith("zone_offense")
+
+    window.editor.pieces[0].pos = (10, 10)
+    assert window.save_play()
+    assert shown == ["save"], "second save should go straight to the same file"
+    close_without_saving(window)
+
+
+def test_save_and_open_round_trip():
+    window = _window_with_a_two_step_play()
+    path = os.path.join(TEST_DATA_DIR, "round_trip.json")
+    fake_dialogs(window, save_path=path)
+    window.save_play()
     saved_pieces = [(p.id, p.team, p.pos) for p in window.editor.pieces]
-    window.editor.new_play()
-    window.rotation_input.setValue(0)
-    window.load_play()
+
+    window.new_play()
+    assert window.editor.pieces == [] and window.rotation_input.value() == 0
+    fake_dialogs(window, open_path=path)
+    window.open_play()
 
     assert [(p.id, p.team, p.pos) for p in window.editor.pieces] == saved_pieces
     assert window.editor.rotation_deg == 20 and window.rotation_input.value() == 20
     assert window.steps_list.count() == 2
     assert window.editor.steps.steps[1].annotations[0].linked_piece_id == saved_pieces[0][0]
-    window.close()
+    assert not window.has_unsaved_changes()
+    close_without_saving(window)
+
+
+def test_unsaved_changes_are_tracked_and_undo_clears_them():
+    window = MainWindow()
+    assert not window.has_unsaved_changes()
+    window.editor.set_tool(Tool.ADD_OFFENSE)
+    window.editor.press((100, 100))
+    window._on_board_edited()
+    assert window.has_unsaved_changes() and window.isWindowModified()
+    window.undo_last_action()
+    assert not window.has_unsaved_changes(), "undoing back to the saved state means nothing to save"
+    close_without_saving(window)
+
+
+def test_unsaved_changes_prompt_cancel_discard_and_save():
+    window = _window_with_a_two_step_play()
+
+    shown = fake_dialogs(window, save_changes_answer=QMessageBox.Cancel)
+    window.new_play()
+    assert shown == ["save changes?"] and window.editor.pieces, "cancel must keep the play"
+
+    fake_dialogs(window, save_changes_answer=QMessageBox.Discard)
+    window.new_play()
+    assert window.editor.pieces == []
+
+    window.editor.pieces.append(Piece.create('X', (1, 1)))
+    path = os.path.join(TEST_DATA_DIR, "saved_on_prompt.json")
+    fake_dialogs(window, save_path=path, save_changes_answer=QMessageBox.Save)
+    window.new_play()
+    assert os.path.isfile(path) and window.editor.pieces == []
+    close_without_saving(window)
+
+
+def test_recent_files_are_remembered_and_missing_ones_dropped():
+    window = MainWindow()
+    paths = []
+    for name in ("first", "second"):
+        path = os.path.join(TEST_DATA_DIR, f"recent_{name}.json")
+        fake_dialogs(window, save_path=path)
+        window.save_play_as()
+        paths.append(os.path.abspath(path))
+    assert window.recent_files()[:2] == [paths[1], paths[0]], "most recent first"
+
+    os.remove(paths[0])
+    shown = fake_dialogs(window)
+    window.open_play_file(paths[0])
+    assert shown == ["warning: File not found"]
+    assert paths[0] not in window.recent_files()
+    window._rebuild_recent_files_menu()
+    assert window.recent_files_menu.actions()[0].text() == "recent_second.json"
+    close_without_saving(window)
 
 
 def test_new_pieces_never_reuse_loaded_ids():

@@ -3,6 +3,8 @@ main.py - Entry point for the Coach Board Tool.
 ===============================================
 
 Starts the Qt application with the dark theme and opens the main window.
+A play file given on the command line (or via "Open with" / double-click
+once a file association is set up) is opened straight away.
 
 Any uncaught error - at startup or inside a button handler - is written to
 error_log.txt next to the app and shown in a dialog, instead of the app
@@ -15,6 +17,7 @@ Version history:
     1.0.0  2026-09-15  TCurrie11  Initial release.
     1.1.1  2026-10-14  TCurrie11  Added file header, version history and docstrings.
     2.0.0  2026-10-14  TCurrie11  Launches the Qt UI; cross-platform error dialog replaces the Windows-only popup.
+    2.1.0  2026-10-14  TCurrie11  Opens a play file passed on the command line; settings identity for recent files.
 """
 import os
 import sys
@@ -22,7 +25,7 @@ import traceback
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from config import APP_NAME, DATA_DIR
+from config import APP_NAME, APP_ORGANIZATION, DATA_DIR
 
 ERROR_LOG_PATH = os.path.join(DATA_DIR, "error_log.txt")
 
@@ -48,6 +51,7 @@ def main():
     sys.excepthook = report_unexpected_error
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
+    app.setOrganizationName(APP_ORGANIZATION)  # where QSettings stores recent files
 
     from theme import apply_dark_theme
     from main_window import MainWindow
@@ -55,6 +59,9 @@ def main():
     apply_dark_theme(app)
     window = MainWindow()
     window.show()
+    play_files_to_open = [arg for arg in sys.argv[1:] if os.path.isfile(arg)]
+    if play_files_to_open:
+        window.open_play_file(play_files_to_open[0])
     return app.exec()
 
 
