@@ -16,6 +16,34 @@ machines, so **you don't need a Windows PC or a Mac of your own** for either.
    **"Build Windows exe"** and **"Build macOS app"**. Both run automatically
    on every push, or you can click one and hit **Run workflow** manually.
 
+## Releasing a new version (the easy way)
+
+GitHub can build both apps and draft the release page for you:
+
+1. In `config.py`, set `APP_VERSION = "X.Y.Z"`. In `CHANGELOG.md`, add a
+   `## X.Y.Z - <date>` section listing what changed. Commit and push.
+2. Check it locally (optional): `python tools/release_notes.py vX.Y.Z`
+   prints the release notes, or says what's missing.
+3. Tag and push:
+   ```bash
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+4. The **Draft release** workflow (Actions tab, ~6 minutes) builds and tests
+   both apps, smoke-tests them, and creates a **draft** release with both
+   downloads and coach-friendly notes attached.
+5. Open **Releases** on GitHub, read the draft (edit if you like), and click
+   **Publish release**. Nothing is public until you do.
+
+Coaches always get the newest version from
+`https://github.com/TCurrie11/coach-board-tool/releases/latest`.
+
+The workflow refuses to release if the tag doesn't match `APP_VERSION` or the
+changelog has no section for it. To test the pipeline without drafting
+anything, push a tag like `vX.Y.Z-dryrun`.
+
+The sections below describe getting each app by hand from a normal build.
+
 ## Getting the Windows exe
 
 Wait for **"Build Windows exe"** to finish (green check, 2-4 minutes), open
